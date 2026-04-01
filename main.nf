@@ -4,7 +4,7 @@ include { paramsSummaryMap } from 'plugin/nf-schema'
 
 import groovy.io.FileType
 
-include { msconvert; createNewSpectraLookup; identify_info_map; listify } from './modules.nf' 
+include { identify_info_map; listify } from './modules.nf' 
 //include { REPORTING } from './workflows/reporting.nf'
 
 
@@ -135,7 +135,7 @@ process DiaQuantificationReport {
   tuple path(raws), path(quants), path(lib), path(tdb), val(diannparams), val(quantparams)
   
   output:
-  stdout
+  path('report.parquet')
 
   script:
   """
@@ -161,6 +161,7 @@ process DiaQuantificationReport {
     //--var-mod 'UniMod:4,57.021464,C' \
 
 workflow {
+  main:
   // FIXME
 //  ms1acc = [timstof: 20, velos: 10, qe: 10, astral: 10][instrument]
 //  ms2acc = 20
@@ -193,8 +194,6 @@ workflow {
     | set { raw_c }
     
     raw_c.thermo
-    | map { it + [false, false] }
-    | msconvert
     | concat(raw_c.bruker)
     | set { diann_in }
   
@@ -212,78 +211,90 @@ workflow {
     } else {
       library = channel.fromPath(params.library)
     }
-  
-    // Pre-made quantfiles go into a channel
-    if (infiles.findAll { k,v -> v.quantfile }) {
-      // First if any quantfiles are specified in inputdef we only take those
-     channel.from(infiles.findAll { k,v -> v.quantfile }
-         .collect { k,v -> [k, v.file_path, file(v.quantfile)] })
-       .concat(infiles.findAll { k,v -> !v.quantfile }
-         .collect { k,v -> [k, v.file_path, false] })
-       .set { rawquantfiles }
 
-    } else if (params.quantdir) {
-      // If not and a quantdir is specified, try to match those with the raws by name
-      def qfs = []
-      file(params.quantdir).traverse(type: FileType.FILES, maxDepth: 0) { qfs.add(it) }
-      tmp_q = channel.from(qfs).map { [file(it).baseName, file(it)] }
-      channel.from(infiles.collect { k,v ->
-            ["${v.file_path.baseName}_${v.file_path.extension}", k, v.file_path] })
-        .join(tmp_q, remainder: true)
-        .map { [it[1], it[2], it[3]] } // key, rawfile, quantfile/null
-        .set { rawquantfiles }
+    // If no output params are given, output only the last step, i.e. report
+    outputreport = params.outputreport || (!params.outputlib && !params.outputquant && !params.outputreport)
+    if (outputreport || params.outputquant) {
+  
+      // Pre-made quantfiles go into a channel
+      if (infiles.findAll { k,v -> v.quantfile }) {
+        // First if any quantfiles are specified in inputdef we only take those
+       channel.from(infiles.findAll { k,v -> v.quantfile }
+           .collect { k,v -> [k, v.file_path, file(v.quantfile)] })
+         .concat(infiles.findAll { k,v -> !v.quantfile }
+           .collect { k,v -> [k, v.file_path, false] })
+         .set { rawquantfiles }
+  
+      } else if (params.quantdir) {
+        // If not and a quantdir is specified, try to match those with the raws by name
+        def qfs = []
+        file(params.quantdir).traverse(type: FileType.FILES, maxDepth: 0) { qfs.add(it) }
+        tmp_q = channel.from(qfs).map { [file(it).baseName, file(it)] }
+        channel.from(infiles.collect { k,v ->
+              ["${v.file_path.baseName}_${v.file_path.extension}", k, v.file_path] })
+          .join(tmp_q, remainder: true)
+          .map { [it[1], it[2], it[3]] } // key, rawfile, quantfile/null
+          .set { rawquantfiles }
+  
+      } else {
+        // No quantfiles
+        channel.from(infiles.collect { k,v ->
+              ["${v.file_path.baseName}_${v.file_path.extension}", k, v.file_path] })
+          .map { [it[1], it[2], false] } // key, rawfile, false
+          .set { rawquantfiles }
+      }
+  	
+      batchsize = params.batchsize ?: infiles.size()
+      rawquantfiles
+      | filter { !it[2] } // skip rawfiles without quant
+      | map { [it[0], it[1]] } // no quant to this proc
+      | collate(batchsize)
+      | transpose
+      | collate(2) // id, raw
+      | combine(library)
+      | combine(db_params)
+      | RunDiaAnalysis
+      | map { [it[0], listify(it[1]), listify(it[2])] }
+      // first sort keys/raw files on raw basename
+      | map { it.transpose().sort({a,b -> a[1].baseName <=> b[1].baseName}).transpose() }
+      // now sort non-matched quantfiles by basename so they match up
+      | map { [it[0], it[1], it[2].sort({a,b -> a.baseName <=> b.baseName})] }
+      | transpose
+      | set { new_raw_quants }
 
     } else {
-      // No quantfiles
-      channel.from(infiles.collect { k,v ->
-            ["${v.file_path.baseName}_${v.file_path.extension}", k, v.file_path] })
-        .map { [it[1], it[2], false] } // key, rawfile, false
-        .set { rawquantfiles }
+      new_raw_quants = channel.empty()
     }
-	
-    batchsize = params.batchsize ?: infiles.size()
-    rawquantfiles
-    | filter { !it[2] } // skip rawfiles without quant
-    | map { [it[0], it[1]] } // no quant to this proc
-    | collate(batchsize)
-    | transpose
-    | collate(2) // id, raw
-    | combine(library)
-    | combine(db_params)
-    | RunDiaAnalysis
-    | map { [it[0], listify(it[1]), listify(it[2])] }
-    // first sort keys/raw files on raw basename
-    | map { it.transpose().sort({a,b -> a[1].baseName <=> b[1].baseName}).transpose() }
-    // now sort non-matched quantfiles by basename so they match up
-    | map { [it[0], it[1], it[2].sort({a,b -> a.baseName <=> b.baseName})] }
-    | transpose
-    | set { new_raw_quants }
   
-    // Run training quantUMS and then full experiment
-    rawquantfiles
-    | filter { it[2] }
-    | concat(new_raw_quants)
-    | filter { infiles[it[0]].train_quantums as Integer == 1 }
-    | map { [it[1], it[2]] }
-    | toList
-    | transpose
-    | toList
-    | combine(library)
-    | combine(db_params)
-    | TrainQuantUMS
+    if (outputreport) {
+      // Run training quantUMS and then full experiment
+      rawquantfiles
+      | filter { it[2] }
+      | concat(new_raw_quants)
+      | filter { infiles[it[0]].train_quantums as Integer == 1 }
+      | map { [it[1], it[2]] }
+      | toList
+      | transpose
+      | toList
+      | combine(library)
+      | combine(db_params)
+      | TrainQuantUMS
 
-    rawquantfiles
-    | filter { it[2] }
-    | concat(new_raw_quants)
-    | map { [it[1], it[2]] }
-    | toList
-    | transpose
-    | toList
-    | combine(library)
-    | combine(db_params)
-    | combine(TrainQuantUMS.out)
-|view()
-    | DiaQuantificationReport
+      rawquantfiles
+      | filter { it[2] }
+      | concat(new_raw_quants)
+      | map { [it[1], it[2]] }
+      | toList
+      | transpose
+      | toList
+      | combine(library)
+      | combine(db_params)
+      | combine(TrainQuantUMS.out)
+      | DiaQuantificationReport
+      | set { reports_out }
+    } else {
+      reports_out = channel.empty()
+    }
 
 
   } else if (params.raw) {
@@ -300,8 +311,15 @@ workflow {
     raw_c = channel.empty()
   }
 
- library.filter(!params.library && params.outputlib)
-    .concat(RunDiaAnalysis.out.filter(params.quantbatch))
-    .set { outputs }
-    
+  library.filter { !params.library && params.outputlib }
+    .concat(new_raw_quants.filter { params.outputquant }.map { it[2] })
+    .concat(reports_out)
+    .set { ch_wfoutputs }
+
+  publish:
+  wfoutputs = ch_wfoutputs
+}
+
+output {
+  wfoutputs { }
 }

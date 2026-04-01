@@ -1,33 +1,3 @@
-
-process msconvert {
-
-  input:
-  tuple val(id), path(raw), val(usr_filters), val(usr_options)
-
-  output:
-  tuple val(id), path(outfile)
-
-  script:
-  // the string "infile" does not have NF escaping characters like & (e.g. in FAIMS 35&65),
-  // which it does to "raw". That would work fine but not if the files are quoted in the 
-  // script, then they cant be found when there is \&.
-  infile = "${raw.baseName}.${raw.extension}"
-  outfile = "${raw.baseName}.mzML"
-
-  std_filters = ['"peakPicking true 2"', '"precursorRefine"']
-  filters = usr_filters ? usr_filters.tokenize(';') : std_filters
-  filters = filters.collect() { x -> "--filter ${x}" }.join(' ')
-  options = usr_options ? usr_options.tokenize(';') : []
-  options = options.collect() {x -> "--${x}"}.join(' ')
-  """
-  # Resolve directory if necessary, pwiz tries to read NF soft links as if they are files, which
-  # does not work in case of directory
-  ${raw.isDirectory() ?  "mv '${infile}' tmpdir && cp -rL tmpdir '${infile}'" : ''}
-  wine msconvert "${infile}" ${filters} ${options}
-  """
-}
-
-
 process createNewSpectraLookup {
   container 'quay.io/biocontainers/msstitch:3.16--pyhdfd78af_0'
 
