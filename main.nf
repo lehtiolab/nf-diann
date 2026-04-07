@@ -24,34 +24,67 @@ cache 'lenient'
   """
   # Create predicted library from fasta
   diann-linux --threads ${task.cpus} \
-    --fasta $fasta \
+    ${fasta.collect { "--fasta $it" }.join(' ')} \
+    --cut ${diannparams.cut} \
     --gen-spec-lib \
     --predictor \
     --fasta-search \
     --out-lib firstlib \
     --missed-cleavages $diannparams.miscleav \
-    --mass-acc-ms1 $diannparams.ms1acc \
-    --mass-acc $diannparams.ms2acc \
-    --window $diannparams.window \
     ${diannparams.varmods.collect { "--var-mod $it" }.join(' ')} \
     ${diannparams.fixmods.collect { "--fixed-mod $it" }.join(' ')} \
-    --var-mods $diannparams.maxvarmods
-  
+    --var-mods $diannparams.maxvarmods \
+    ${diannparams.ntermmetex ? '--met-excision' : ''} \
+    ${diannparams.ntermac ? '--var-mod UniMod:1,42.010565,*n' : ''} \
+    ${diannparams.idstonames ? '--ids-to-names' : ''} \
+    --pg-level ${diannparams.pglvl} \
+    --min-pr-charge ${diannparams.mincharge} \
+    --max-pr-charge ${diannparams.maxcharge} \
+    --min-pep-len ${diannparams.minpeplen} \
+    --max-pep-len ${diannparams.maxpeplen} \
+    --min-pr-mz ${diannparams.minmz} \
+    --max-pr-mz ${diannparams.maxmz} \
+    --min-fr-mz ${diannparams.minfrmz} \
+    --max-fr-mz ${diannparams.maxfrmz} \
+    ${diannparams.pglvl} \
+    ${diannparams.exclude_contaminants ? "--cont-quant-exclude ${diannparams.exclude_contaminants}" : ''}
+
+    # Is this used in predict from fasta, but maybe test this:
+    #${diannparams.window ? "--window $diannparams.window" : ''} \
+    #--mass-acc-ms1 $diannparams.ms1acc \
+    #--mass-acc $diannparams.ms2acc \
+
   # Empirical library by running it with raws
   diann-linux --threads ${task.cpus} \
     ${raws.collect { "--f $it" }.join(' ') } \
-    --fasta $fasta \
+    ${fasta.collect { "--fasta $it" }.join(' ')} \
+    --cut ${diannparams.cut} \
     --lib firstlib.predicted.speclib \
     --gen-spec-lib \
     --out-lib library \
+    --rt-profiling \
     --missed-cleavages $diannparams.miscleav \
-    --mass-acc-ms1 $diannparams.ms1acc \
-    --mass-acc $diannparams.ms2acc \
-    --window $diannparams.window \
+    ${diannparams.ms1acc ? "--mass-acc-ms1 ${diannparams.ms1acc}" : ''} \
+    ${diannparams.ms2acc ? "--mass-acc ${diannparams.ms2acc}" : ''} \
+    ${diannparams.window ? "--window $diannparams.window" : ''} \
     ${diannparams.varmods.collect { "--var-mod $it" }.join(' ')} \
     ${diannparams.fixmods.collect { "--fixed-mod $it" }.join(' ')} \
-    --var-mods $diannparams.maxvarmods
+    --var-mods $diannparams.maxvarmods \
+    ${diannparams.ntermmetex ? '--met-excision' : ''} \
+    ${diannparams.ntermac ? '--var-mod UniMod:1,42.010565,*n' : ''} \
+    --min-pr-charge ${diannparams.mincharge} \
+    --max-pr-charge ${diannparams.maxcharge} \
+    --min-pep-len ${diannparams.minpeplen} \
+    --max-pep-len ${diannparams.maxpeplen} \
+    --min-pr-mz ${diannparams.minmz} \
+    --max-pr-mz ${diannparams.maxmz} \
+    --min-fr-mz ${diannparams.minfrmz} \
+    --max-fr-mz ${diannparams.maxfrmz} \
+    ${diannparams.indiwin ? "--individual-windows" : ''} \
+    ${diannparams.indiacc ? "--individual-mass-acc" : ''} \
+    ${diannparams.exclude_contaminants ? "--cont-quant-exclude ${diannparams.exclude_contaminants}" : ''}
   """
+// rt-profiling add to the empirical step
 }
 
 
@@ -59,44 +92,53 @@ process RunDiaAnalysis {
 
   // "Second pass" after creating the library, manual MBR
   // No reports are output, only quant files
-  // q-value cutoff seems 0.01 by default
   container "ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1"
 
   input:
-  tuple val(ids), path(raws), path(lib), path(tdb), val(diannparams)
+  tuple val(ids), path(raws), path(lib), path(fasta), val(diannparams)
   
   output:
-  //val('fake'), emit: fake
   tuple val(ids), path(raws), path('*.quant')
-  //tuple path('out.txt'), path('out.stats.tsv'), emit: tsv
-  //path('out.parquet'), emit: pq
 
   script:
   """
   diann-linux --threads ${task.cpus} \
     ${raws.collect { "--f $it" }.join(' ') } \
     --lib $lib \
-    --fasta $tdb \
+    ${fasta.collect { "--fasta $it" }.join(' ')} \
+    --cut ${diannparams.cut} \
     --temp ./ \
-    --missed-cleavages $diannparams.miscleav \
-    --mass-acc-ms1 $diannparams.ms1acc \
-    --mass-acc $diannparams.ms2acc \
-    --window $diannparams.window \
+    ${diannparams.ms1acc ? "--mass-acc-ms1 ${diannparams.ms1acc}" : ''} \
+    ${diannparams.ms2acc ? "--mass-acc ${diannparams.ms2acc}" : ''} \
+    ${diannparams.window ? "--window $diannparams.window" : ''} \
     ${diannparams.varmods.collect { "--var-mod $it" }.join(' ')} \
     ${diannparams.fixmods.collect { "--fixed-mod $it" }.join(' ')} \
-    --var-mods $diannparams.maxvarmods
+    ${diannparams.ntermmetex ? '--met-excision' : ''} \
+    ${diannparams.ntermac ? '--var-mod UniMod:1,42.010565,*n' : ''} \
+    ${diannparams.nonorm ? '--no-norm' : ''} \
+    ${diannparams.idstonames ? '--ids-to-names' : ''} \
+    --pg-level ${diannparams.pglvl} \
+    --min-pr-charge ${diannparams.mincharge} \
+    --max-pr-charge ${diannparams.maxcharge} \
+    --min-pep-len ${diannparams.minpeplen} \
+    --max-pep-len ${diannparams.maxpeplen} \
+    --min-pr-mz ${diannparams.minmz} \
+    --max-pr-mz ${diannparams.maxmz} \
+    --min-fr-mz ${diannparams.minfrmz} \
+    --max-fr-mz ${diannparams.maxfrmz} \
+    ${diannparams.indiwin ? "--individual-windows" : ''} \
+    ${diannparams.indiacc ? "--individual-mass-acc" : ''} \
+    ${diannparams.exclude_contaminants ? "--cont-quant-exclude ${diannparams.exclude_contaminants}" : ''}
   """
 }
 
 
 process TrainQuantUMS {
 
-  // q-value cutoff seems 0.01 by default
-  
   container "ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1"
 
   input:
-  tuple path(raws), path(quants), path(lib), path(tdb), val(diannparams)
+  tuple path(raws), path(quants), path(lib), path(fasta), val(diannparams)
   
   output:
   stdout
@@ -107,17 +149,32 @@ process TrainQuantUMS {
   diann-linux --threads ${task.cpus} \
     ${raws.collect { "--f \$(realpath $it)"}.join(' ') } \
     --lib $lib \
-    --fasta $tdb \
+    ${fasta.collect { "--fasta $it" }.join(' ')} \
+    --cut ${diannparams.cut} \
     --use-quant \
     --temp ./ \
     --quant-train-runs 0:${listify(raws).size() -1} \
-    --missed-cleavages $diannparams.miscleav \
-    --mass-acc-ms1 $diannparams.ms1acc \
-    --mass-acc $diannparams.ms2acc \
-    --window $diannparams.window \
+    ${diannparams.ms1acc ? "--mass-acc-ms1 ${diannparams.ms1acc}" : ''} \
+    ${diannparams.ms2acc ? "--mass-acc ${diannparams.ms2acc}" : ''} \
+    ${diannparams.window ? "--window $diannparams.window" : ''} \
     ${diannparams.varmods.collect { "--var-mod $it" }.join(' ')} \
     ${diannparams.fixmods.collect { "--fixed-mod $it" }.join(' ')} \
-    --var-mods $diannparams.maxvarmods \
+    ${diannparams.ntermmetex ? '--met-excision' : ''} \
+    ${diannparams.ntermac ? '--var-mod UniMod:1,42.010565,*n' : ''} \
+    ${diannparams.nonorm ? '--no-norm' : ''} \
+    ${diannparams.idstonames ? '--ids-to-names' : ''} \
+    --pg-level ${diannparams.pglvl} \
+    --min-pr-charge ${diannparams.mincharge} \
+    --max-pr-charge ${diannparams.maxcharge} \
+    --min-pep-len ${diannparams.minpeplen} \
+    --max-pep-len ${diannparams.maxpeplen} \
+    --min-pr-mz ${diannparams.minmz} \
+    --max-pr-mz ${diannparams.maxmz} \
+    --min-fr-mz ${diannparams.minfrmz} \
+    --max-fr-mz ${diannparams.maxfrmz} \
+    ${diannparams.indiwin ? "--individual-windows" : ''} \
+    ${diannparams.indiacc ? "--individual-mass-acc" : ''} \
+    ${diannparams.exclude_contaminants ? "--cont-quant-exclude ${diannparams.exclude_contaminants}" : ''} \
        > tmpstdout.log
     grep '$paramline' tmpstdout.log | sed 's/$paramline/\\-\\-quant-params/'
   """
@@ -125,40 +182,51 @@ process TrainQuantUMS {
 
 process DiaQuantificationReport {
 
-  // q-value cutoff seems 0.01 by default
-  
-  //container 'michelmoser/diann-1.9.2'
-  
   container "ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1"
 
   input:
-  tuple path(raws), path(quants), path(lib), path(tdb), val(diannparams), val(quantparams)
+  tuple path(raws), path(quants), path(lib), path(fasta), val(diannparams), val(quantparams)
   
   output:
-  path('report.parquet')
+  tuple path('report.parquet'), path('*.tsv'), path('report.log.txt')
 
   script:
   """
   diann-linux --threads ${task.cpus} \
     ${raws.collect { "--f \$(realpath $it)"}.join(' ') } \
     --lib $lib \
-    --fasta $tdb \
+    ${fasta.collect { "--fasta $it" }.join(' ')} \
+    --cut ${diannparams.cut} \
     --use-quant \
     --temp ./ \
     ${quantparams.trim()} \
-    --missed-cleavages $diannparams.miscleav \
-    --mass-acc-ms1 $diannparams.ms1acc \
-    --mass-acc $diannparams.ms2acc \
-    --window $diannparams.window \
+    ${diannparams.ms1acc ? "--mass-acc-ms1 ${diannparams.ms1acc}" : ''} \
+    ${diannparams.ms2acc ? "--mass-acc ${diannparams.ms2acc}" : ''} \
+    ${diannparams.window ? "--window $diannparams.window" : ''} \
     ${diannparams.varmods.collect { "--var-mod $it" }.join(' ')} \
     ${diannparams.fixmods.collect { "--fixed-mod $it" }.join(' ')} \
-    --var-mods $diannparams.maxvarmods \
+    --matrices \
+    ${diannparams.ntermmetex ? '--met-excision' : ''} \
+    ${diannparams.ntermac ? '--var-mod UniMod:1,42.010565,*n' : ''} \
+    ${diannparams.nonorm ? '--no-norm' : ''} \
+    ${diannparams.idstonames ? '--ids-to-names' : ''} \
+    --pg-level ${diannparams.pglvl} \
+    --min-pr-charge ${diannparams.mincharge} \
+    --max-pr-charge ${diannparams.maxcharge} \
+    --min-pep-len ${diannparams.minpeplen} \
+    --max-pep-len ${diannparams.maxpeplen} \
+    --min-pr-mz ${diannparams.minmz} \
+    --max-pr-mz ${diannparams.maxmz} \
+    --min-fr-mz ${diannparams.minfrmz} \
+    --max-fr-mz ${diannparams.maxfrmz} \
+    ${diannparams.indiwin ? "--individual-windows" : ''} \
+    ${diannparams.indiacc ? "--individual-mass-acc" : ''} \
+    --qvalue ${diannparams.precfdr} \
+    --matrix-qvalue ${diannparams.protfdr} \
+    ${diannparams.exclude_contaminants ? "--cont-quant-exclude ${diannparams.exclude_contaminants}" : ''}
   """
 }
 
-
-    //--var-mod 'UniMod:35,15.994915,M' \
-    //--var-mod 'UniMod:4,57.021464,C' \
 
 workflow {
   main:
@@ -170,14 +238,34 @@ workflow {
     exit 1, 'Cannot output generated library while also being passed a --library'
   }
 
+  cut = ['trypsin': 'K*,R*,!*P', 'trypsinp': 'K*,R*'][params.enzyme]
   diann_params = [
     varmods: params.varmods.tokenize(';'),
     fixmods: params.fixmods.tokenize(';'),
+    ntermmetex: params.ntermmetexcision,
+    ntermac: params.ntermacetyl,
+    precfdr: params.precconflvl,
+    protfdr: params.proteinconflvl,
     maxvarmods: params.maxvarmods,
     ms1acc: params.ms1acc,
     ms2acc: params.ms2acc,
     miscleav: params.miscleav,
     window: params.window,
+    mincharge: params.mincharge,
+    maxcharge: params.maxcharge,
+    minmz: params.minmz,
+    maxmz: params.maxmz,
+    minfrmz: params.minfragmz,
+    maxfrmz: params.maxfragmz,
+    minpeplen: params.minpeplen,
+    maxpeplen: params.maxpeplen,
+    nonorm: params.nonorm,
+    pglvl: params.proteotypicity,
+    idstonames: params.ids_to_names,
+    contam: params.contaminants,
+    indiacc: params.individual_massacc,
+    indiwin: params.individual_windows,
+    cut: cut,
   ]
   
 
@@ -197,7 +285,9 @@ workflow {
     | concat(raw_c.bruker)
     | set { diann_in }
   
-    db_params = channel.fromPath(params.tdb).map { [it, diann_params] }
+    db_params = channel.fromPath(params.tdb)
+      .toList()
+      .map { [it, diann_params] }
 
     if (!params.library) {
       diann_in
