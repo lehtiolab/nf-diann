@@ -58,7 +58,7 @@ def create_info_map(info_fn, possible_params) {
 
 
 def identify_info_map(info_fn) {
-  expected_fields = ["file_path", "create_lib", "train_quantums", "searchbatch", "quantfile"]
+  expected_fields = ["file_path", "create_lib", "train_quantums", "quantfile"]
   def samples = create_info_map(info_fn, expected_fields)
   // Set all files to go to lib create if none specified (and no params.library passed)
   new_samples = samples
