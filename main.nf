@@ -9,16 +9,16 @@ include { identify_info_map; listify } from './modules.nf'
 
 
 
-process createLibrary {
+process predictFastaLibrary {
 cache 'lenient'
 
   container "ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1"
   
   input:
-  tuple path(raws), path(fasta), val(diannparams)
+  tuple path(fasta), val(diannparams)
 
   output:
-  path('library.parquet')
+  path('library.predicted.speclib')
 
   script:
   """
@@ -29,7 +29,7 @@ cache 'lenient'
     --gen-spec-lib \
     --predictor \
     --fasta-search \
-    --out-lib firstlib \
+    --out-lib library.speclib \
     --missed-cleavages $diannparams.miscleav \
     ${diannparams.varmods.collect { "--var-mod $it" }.join(' ')} \
     ${diannparams.fixmods.collect { "--fixed-mod $it" }.join(' ')} \
@@ -53,13 +53,29 @@ cache 'lenient'
     #${diannparams.window ? "--window $diannparams.window" : ''} \
     #--mass-acc-ms1 $diannparams.ms1acc \
     #--mass-acc $diannparams.ms2acc \
+    """
+}
 
+
+process createEmpiricalLibrary {
+cache 'lenient'
+
+  container "ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1"
+  
+  input:
+  tuple path(predlib), path(raws), path(fasta), val(diannparams)
+
+  output:
+  path('library.parquet')
+
+  script:
+  """
   # Empirical library by running it with raws
   diann-linux --threads ${task.cpus} \
     ${raws.collect { "--f $it" }.join(' ') } \
     ${fasta.collect { "--fasta $it" }.join(' ')} \
     --cut ${diannparams.cut} \
-    --lib firstlib.predicted.speclib \
+    --lib $predlib \
     --gen-spec-lib \
     --out-lib library \
     --rt-profiling \
@@ -289,17 +305,37 @@ workflow {
       .toList()
       .map { [it, diann_params] }
 
+    diann_in
+    | filter { infiles[it[0]].create_lib as Integer == 1 }
+    | map { it[1] } // only need file for library, not id
+    | toList
+    | toList
+    | combine(db_params)
+    | set { raws_to_emp_lib }
+
     if (!params.library) {
-      diann_in
-      | filter { infiles[it[0]].create_lib as Integer == 1 }
-      | map { it[1] } // only need file for library, not id
-      | toList
-      | toList
-      | combine(db_params)
-      | createLibrary
-      | set { library }
+      passed_lib = channel.empty()
+
+      db_params
+      | predictFastaLibrary
+      | set { predicted_lib }
+
+      predicted_lib
+      | combine(raws_to_emp_lib)
+      | createEmpiricalLibrary
+      | set { empirical_lib }
+
     } else {
-      library = channel.fromPath(params.library)
+      predicted_lib = channel.empty()
+
+      passed_lib = channel.fromPath(params.library)
+      passed_lib 
+      | filter { it.extension == 'speclib' }
+      | combine(raws_to_emp_lib)
+      | createEmpiricalLibrary
+      | concat(passed_lib.filter { it.extension == 'parquet' })
+      | set { empirical_lib }
+
     }
 
     // If no output params are given, output only the last step, i.e. report
@@ -341,7 +377,7 @@ workflow {
       | collate(batchsize)
       | transpose
       | collate(2) // id, raw
-      | combine(library)
+      | combine(empirical_lib)
       | combine(db_params)
       | RunDiaAnalysis
       | map { [it[0], listify(it[1]), listify(it[2])] }
@@ -366,7 +402,7 @@ workflow {
       | toList
       | transpose
       | toList
-      | combine(library)
+      | combine(empirical_lib)
       | combine(db_params)
       | TrainQuantUMS
 
@@ -377,7 +413,7 @@ workflow {
       | toList
       | transpose
       | toList
-      | combine(library)
+      | combine(empirical_lib)
       | combine(db_params)
       | combine(TrainQuantUMS.out)
       | DiaQuantificationReport
@@ -401,7 +437,10 @@ workflow {
     raw_c = channel.empty()
   }
 
-  library.filter { !params.library && params.outputlib }
+// TODO pass emp lib, refine it with another raw file? Is that a usecase?
+
+    predicted_lib.filter { params.output_pred_lib }
+    .concat(createEmpiricalLibrary.out.filter { params.output_emp_lib })
     .concat(new_raw_quants.filter { params.outputquant }.map { it[2] })
     .concat(reports_out)
     .set { ch_wfoutputs }
