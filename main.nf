@@ -18,7 +18,8 @@ cache 'lenient'
   tuple path(fasta), val(diannparams)
 
   output:
-  path('library.predicted.speclib')
+  path('library.predicted.speclib'), emit: lib
+  path('insilico_predict_lib.log'), emit: log
 
   script:
   """
@@ -49,6 +50,7 @@ cache 'lenient'
     ${diannparams.pglvl} \
     ${diannparams.exclude_contaminants ? "--cont-quant-exclude ${diannparams.exclude_contaminants}" : ''}
 
+    mv library.log.txt insilico_predict_lib.log
     # Is this used in predict from fasta, but maybe test this:
     #${diannparams.window ? "--window $diannparams.window" : ''} \
     #--mass-acc-ms1 $diannparams.ms1acc \
@@ -66,7 +68,8 @@ cache 'lenient'
   tuple path(predlib), path(raws), path(fasta), val(diannparams)
 
   output:
-  path('quants/*.quant')
+  path('quants/*.quant'), emit: quants
+  path('search_predicted_lib.log'), emit: log
 
   script:
   """
@@ -100,6 +103,8 @@ cache 'lenient'
     ${diannparams.indiwin ? "--individual-windows" : ''} \
     ${diannparams.indiacc ? "--individual-mass-acc" : ''} \
     ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''}
+
+    mv report.log.txt search_predicted_lib.log
   """
 }
 
@@ -111,7 +116,8 @@ process combineEmpiricalLibraryRuns {
   tuple path('quants/*'), path(predlib), path(raws), path(fasta), val(diannparams)
   
   output:
-  path('library.parquet')
+  path('library.parquet'), emit: lib
+  path('create_empirical_lib.log'), emit: log
   
   script:
   """
@@ -147,8 +153,8 @@ process combineEmpiricalLibraryRuns {
     ${diannparams.indiwin ? "--individual-windows" : ''} \
     ${diannparams.indiacc ? "--individual-mass-acc" : ''} \
     ${diannparams.exclude_contaminants ? "--cont-quant-exclude ${diannparams.exclude_contaminants}" : ''}
-  """
-// rt-profiling add to the empirical step
+    mv report.log.txt create_empirical_lib.log
+"""
 }
 
 
@@ -162,7 +168,8 @@ process RunDiaAnalysis {
   tuple val(ids), path(raws), path(lib), path(fasta), val(diannparams)
   
   output:
-  tuple val(ids), path(raws), path('quants/*.quant')
+  tuple val(ids), path(raws), path('quants/*.quant'), emit: rawquants
+  path('search_empirical_lib.log'), emit: log
 
   script:
   """
@@ -207,7 +214,8 @@ process TrainQuantUMS {
   tuple path(raws), path('quants/*'), path(lib), path(fasta), val(diannparams)
   
   output:
-  stdout
+  stdout emit: params
+  path('train_quantums.log'), emit: log
 
   script:
   paramline = '.*Quantification parameters:' 
@@ -244,6 +252,7 @@ process TrainQuantUMS {
     ${diannparams.exclude_contaminants ? "--cont-quant-exclude ${diannparams.exclude_contaminants}" : ''} \
        > tmpstdout.log
     grep '$paramline' tmpstdout.log | sed 's/$paramline/\\-\\-quant-params/'
+    mv report.log.txt train_quantums.log
   """
 }
 
@@ -255,7 +264,8 @@ process DiaQuantificationReport {
   tuple path(raws), path('quants/*'), path(lib), path(fasta), val(diannparams), val(quantparams)
   
   output:
-  tuple path('report.parquet'), path('*.tsv'), path('report.log.txt')
+  tuple path('report.parquet'), path('*.tsv'), emit: report
+  path('quantify_report.log'), emit: log
 
   script:
   """
@@ -292,9 +302,25 @@ process DiaQuantificationReport {
     --qvalue ${diannparams.precfdr} \
     --matrix-qvalue ${diannparams.protfdr} \
     ${diannparams.exclude_contaminants ? "--cont-quant-exclude ${diannparams.exclude_contaminants}" : ''}
+
+    mv report.log.txt quantify_report.log
   """
 }
 
+
+process logConcat {
+
+  input:
+  path(logs)
+
+  output:
+  path('diann-log.txt')
+  
+  script:
+  """
+  cat ${logs.join(' ')} > diann-log.txt
+  """
+}
 
 workflow {
   main:
@@ -387,25 +413,32 @@ workflow {
       | predictFastaLibrary
       | set { predicted_lib }
 
-      predicted_lib
+      predicted_lib.lib
       | combine(batched_raws_to_emp_lib)
       | searchWithPredictedLib
+
+      searchWithPredictedLib.out.quants
       | flatten | toList | toList // combine all quant files in one big list
-      | combine(predicted_lib)
+      | combine(predicted_lib.lib)
       | combine(all_raws_to_emp_lib.toList().toList())
       | combine(db_params)
       | combineEmpiricalLibraryRuns
+      combineEmpiricalLibraryRuns.out.lib
       | set { empirical_lib }
 
     } else {
-      predicted_lib = channel.empty()
+      predicted_lib = channel.empty().branch {
+        lib: it==1
+        log: it==2
+      }
 
       passed_lib = channel.fromPath(params.library)
       passed_lib 
       | filter { it.extension == 'speclib' }
       | combine(batched_raws_to_emp_lib)
       | searchWithPredictedLib
-      | concat(passed_lib.filter { it.extension == 'parquet' })
+      searchWithPredictedLib.out.quants
+      | mix(passed_lib.filter { it.extension == 'parquet' })
       | set { empirical_lib }
 
     }
@@ -460,6 +493,7 @@ workflow {
       | combine(empirical_lib)
       | combine(db_params)
       | RunDiaAnalysis
+      RunDiaAnalysis.out.rawquants
       | map { [it[0], listify(it[1]), listify(it[2])] }
       // first sort keys/raw files on raw basename
       | map { it.transpose().sort({a,b -> a[1].baseName <=> b[1].baseName}).transpose() }
@@ -495,8 +529,9 @@ workflow {
       | toList
       | combine(empirical_lib)
       | combine(db_params)
-      | combine(TrainQuantUMS.out)
+      | combine(TrainQuantUMS.out.params)
       | DiaQuantificationReport
+      DiaQuantificationReport.out.report
       | set { reports_out }
     } else {
       reports_out = channel.empty()
@@ -517,13 +552,24 @@ workflow {
     raw_c = channel.empty()
   }
 
-// TODO pass emp lib, refine it with another raw file? Is that a usecase?
-
-    predicted_lib.filter { params.output_pred_lib }
-    .concat(searchWithPredictedLib.out.filter { params.output_emp_lib })
-    .concat(new_raw_quants.filter { params.outputquant }.map { it[2] })
-    .concat(reports_out)
-    .set { ch_wfoutputs }
+  // sort logs
+  predicted_lib.log.map { [0, it] }
+  | mix(searchWithPredictedLib.out.log.map { [1, it] })
+  | mix(combineEmpiricalLibraryRuns.out.log.map { [2, it] })
+  | mix(RunDiaAnalysis.out.log.map { [3, it] })
+  | mix(TrainQuantUMS.out.log.map { [4, it] })
+  | mix(DiaQuantificationReport.out.log.map { [5, it] })
+  | toList
+  | map { it.sort({a,b -> a[0] <=> b[0]}) }
+  | transpose
+  | toList
+  | map { it[1] } // remove indices after sorting
+  | logConcat
+  | mix(predicted_lib.lib.filter { params.output_pred_lib })
+  | mix(combineEmpiricalLibraryRuns.out.lib.filter { params.output_emp_lib })
+  | mix(new_raw_quants.filter { params.outputquant }.map { it[2] })
+  | mix(reports_out)
+  | set { ch_wfoutputs }
 
   publish:
   wfoutputs = ch_wfoutputs
