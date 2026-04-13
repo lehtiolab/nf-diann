@@ -47,8 +47,7 @@ cache 'lenient'
     --max-pr-mz ${diannparams.maxmz} \
     --min-fr-mz ${diannparams.minfrmz} \
     --max-fr-mz ${diannparams.maxfrmz} \
-    ${diannparams.pglvl} \
-    ${diannparams.exclude_contaminants ? "--cont-quant-exclude ${diannparams.exclude_contaminants}" : ''}
+    ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''}
 
     mv library.log.txt insilico_predict_lib.log
     # Is this used in predict from fasta, but maybe test this:
@@ -152,7 +151,8 @@ process combineEmpiricalLibraryRuns {
     --max-fr-mz ${diannparams.maxfrmz} \
     ${diannparams.indiwin ? "--individual-windows" : ''} \
     ${diannparams.indiacc ? "--individual-mass-acc" : ''} \
-    ${diannparams.exclude_contaminants ? "--cont-quant-exclude ${diannparams.exclude_contaminants}" : ''}
+    ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''}
+
     mv report.log.txt create_empirical_lib.log
 """
 }
@@ -201,12 +201,18 @@ process RunDiaAnalysis {
     --max-fr-mz ${diannparams.maxfrmz} \
     ${diannparams.indiwin ? "--individual-windows" : ''} \
     ${diannparams.indiacc ? "--individual-mass-acc" : ''} \
-    ${diannparams.exclude_contaminants ? "--cont-quant-exclude ${diannparams.exclude_contaminants}" : ''}
+    ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''}
+
+    mv report.log.txt search_empirical_lib.log
   """
 }
 
 
 process TrainQuantUMS {
+  /* Since we use stdout as output here (to pass parameters to next process),
+  we cannot get the entire stdout in the .command.out, because that would put
+  the full log into the next process .command.sh instead of only the params
+  */
 
   container "ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1"
 
@@ -249,9 +255,9 @@ process TrainQuantUMS {
     --max-fr-mz ${diannparams.maxfrmz} \
     ${diannparams.indiwin ? "--individual-windows" : ''} \
     ${diannparams.indiacc ? "--individual-mass-acc" : ''} \
-    ${diannparams.exclude_contaminants ? "--cont-quant-exclude ${diannparams.exclude_contaminants}" : ''} \
-       > tmpstdout.log
-    grep '$paramline' tmpstdout.log | sed 's/$paramline/\\-\\-quant-params/'
+    ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''} \
+       | tee stdout.backup | grep '$paramline' | sed 's/$paramline/\\-\\-quant-params/'
+
     mv report.log.txt train_quantums.log
   """
 }
@@ -301,7 +307,7 @@ process DiaQuantificationReport {
     ${diannparams.indiacc ? "--individual-mass-acc" : ''} \
     --qvalue ${diannparams.precfdr} \
     --matrix-qvalue ${diannparams.protfdr} \
-    ${diannparams.exclude_contaminants ? "--cont-quant-exclude ${diannparams.exclude_contaminants}" : ''}
+    ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''}
 
     mv report.log.txt quantify_report.log
   """
@@ -356,13 +362,12 @@ workflow {
     nonorm: params.nonorm,
     pglvl: params.proteotypicity,
     idstonames: params.ids_to_names,
-    contam: params.contaminants,
+    excl_contam: params.exclude_contaminants,
     indiacc: params.individual_massacc,
     indiwin: params.individual_windows,
     cut: cut,
   ]
   
-
 
   if (params.input) {
     def infiles = identify_info_map(params.input)
@@ -377,7 +382,7 @@ workflow {
     | set { raw_c }
     
     raw_c.thermo
-    | concat(raw_c.bruker)
+    | mix(raw_c.bruker)
     | set { diann_in }
   
     db_params = channel.fromPath(params.tdb)
@@ -408,10 +413,7 @@ workflow {
     
     if (!params.library) {
       passed_lib = channel.empty()
-
-      db_params
-      | predictFastaLibrary
-      | set { predicted_lib }
+      predicted_lib = predictFastaLibrary(db_params)
 
       predicted_lib.lib
       | combine(batched_raws_to_emp_lib)
@@ -440,7 +442,6 @@ workflow {
       searchWithPredictedLib.out.quants
       | mix(passed_lib.filter { it.extension == 'parquet' })
       | set { empirical_lib }
-
     }
 
     // If no output params are given, output only the last step, i.e. report
@@ -452,7 +453,7 @@ workflow {
         // First if any quantfiles are specified in inputdef we only take those
        channel.from(infiles.findAll { k,v -> v.quantfile }
            .collect { k,v -> [k, v.file_path, file(v.quantfile)] })
-         .concat(infiles.findAll { k,v -> !v.quantfile }
+         .mix(infiles.findAll { k,v -> !v.quantfile }
            .collect { k,v -> [k, v.file_path, false] })
          .set { rawquantfiles }
   
@@ -510,7 +511,7 @@ workflow {
       // Run training quantUMS and then full experiment
       rawquantfiles
       | filter { it[2] }
-      | concat(new_raw_quants)
+      | mix(new_raw_quants)
       | filter { infiles[it[0]].train_quantums as Integer == 1 }
       | map { [it[1], it[2]] }
       | toList
@@ -522,7 +523,7 @@ workflow {
 
       rawquantfiles
       | filter { it[2] }
-      | concat(new_raw_quants)
+      | mix(new_raw_quants)
       | map { [it[1], it[2]] }
       | toList
       | transpose
