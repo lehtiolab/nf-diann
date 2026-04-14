@@ -47,7 +47,9 @@ cache 'lenient'
     --max-pr-mz ${diannparams.maxmz} \
     --min-fr-mz ${diannparams.minfrmz} \
     --max-fr-mz ${diannparams.maxfrmz} \
-    ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''}
+    ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''} \
+      | tee stdout.bak
+    grep ERROR stdout.bak && exit 1
 
     mv library.log.txt insilico_predict_lib.log
     # Is this used in predict from fasta, but maybe test this:
@@ -101,7 +103,9 @@ cache 'lenient'
     --max-fr-mz ${diannparams.maxfrmz} \
     ${diannparams.indiwin ? "--individual-windows" : ''} \
     ${diannparams.indiacc ? "--individual-mass-acc" : ''} \
-    ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''}
+    ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''} \
+      | tee stdout.bak
+    grep ERROR stdout.bak && exit 1
 
     mv report.log.txt search_predicted_lib.log
   """
@@ -151,7 +155,9 @@ process combineEmpiricalLibraryRuns {
     --max-fr-mz ${diannparams.maxfrmz} \
     ${diannparams.indiwin ? "--individual-windows" : ''} \
     ${diannparams.indiacc ? "--individual-mass-acc" : ''} \
-    ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''}
+    ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''} \
+      | tee stdout.bak
+    grep ERROR stdout.bak && exit 1
 
     mv report.log.txt create_empirical_lib.log
 """
@@ -201,7 +207,9 @@ process RunDiaAnalysis {
     --max-fr-mz ${diannparams.maxfrmz} \
     ${diannparams.indiwin ? "--individual-windows" : ''} \
     ${diannparams.indiacc ? "--individual-mass-acc" : ''} \
-    ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''}
+    ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''} \
+      | tee stdout.bak
+    grep ERROR stdout.bak && exit 1
 
     mv report.log.txt search_empirical_lib.log
   """
@@ -258,6 +266,7 @@ process TrainQuantUMS {
     ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''} \
        | tee stdout.backup | grep '$paramline' | sed 's/$paramline/\\-\\-quant-params/'
 
+    grep ERROR stdout.backup && exit 1
     mv report.log.txt train_quantums.log
   """
 }
@@ -307,7 +316,9 @@ process DiaQuantificationReport {
     ${diannparams.indiacc ? "--individual-mass-acc" : ''} \
     --qvalue ${diannparams.precfdr} \
     --matrix-qvalue ${diannparams.protfdr} \
-    ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''}
+    ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''} \
+      | tee stdout.bak
+    grep ERROR stdout.bak && exit 1
 
     mv report.log.txt quantify_report.log
   """
