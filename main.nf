@@ -15,7 +15,7 @@ cache 'lenient'
   container "ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1"
   
   input:
-  tuple path(fasta), val(diannparams)
+  tuple path(fasta, arity: '1..*'), val(diannparams)
 
   output:
   path('library.predicted.speclib'), emit: lib
@@ -66,7 +66,7 @@ cache 'lenient'
   container "ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1"
   
   input:
-  tuple path(predlib), path(raws), path(fasta), val(diannparams)
+  tuple path(predlib), path(raws, arity: '1..*'), path(fasta), val(diannparams)
 
   output:
   path('quants/*.quant'), emit: quants
@@ -116,7 +116,7 @@ process combineEmpiricalLibraryRuns {
   container "ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1"
 
   input:
-  tuple path('quants/*'), path(predlib), path(raws), path(fasta), val(diannparams)
+  tuple path('quants/*'), path(predlib), path(raws, arity: '1..*'), path(fasta), val(diannparams)
   
   output:
   path('library.parquet'), emit: lib
@@ -171,7 +171,7 @@ process RunDiaAnalysis {
   container "ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1"
 
   input:
-  tuple val(ids), path(raws), path(lib), path(fasta), val(diannparams)
+  tuple val(ids), path(raws, arity: '1..*'), path(lib), path(fasta), val(diannparams)
   
   output:
   tuple val(ids), path(raws), path('quants/*.quant'), emit: rawquants
@@ -225,7 +225,7 @@ process TrainQuantUMS {
   container "ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1"
 
   input:
-  tuple path(raws), path('quants/*'), path(lib), path(fasta), val(diannparams)
+  tuple path(raws, arity: '1..*'), path('quants/*'), path(lib), path(fasta), val(diannparams)
   
   output:
   stdout emit: params
@@ -276,7 +276,7 @@ process DiaQuantificationReport {
   container "ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1"
 
   input:
-  tuple path(raws), path('quants/*'), path(lib), path(fasta), val(diannparams), val(quantparams)
+  tuple path(raws, arity: '1..*'), path('quants/*'), path(lib), path(fasta), val(diannparams), val(quantparams)
   
   output:
   tuple path('report.parquet'), path('*.tsv'), emit: report
