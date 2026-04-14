@@ -345,8 +345,10 @@ workflow {
 //  ms1acc = [timstof: 20, velos: 10, qe: 10, astral: 10][instrument]
 //  ms2acc = 20
 
-  if (params.library && params.outputlib) {
-    exit 1, 'Cannot output generated library while also being passed a --library'
+  if (params.library && file(params.library).extension == 'speclib' && params.output_pred_lib) {
+    exit 1, 'Cannot output new predicted library while also being passed a --library'
+  } else if (params.library && file(params.library).extension == 'parquet' && params.output_emp_lib) {
+    exit 1, 'Cannot output new empirical library while also being passed a --library'
   }
 
   cut = ['trypsin': 'K*,R*,!*P', 'trypsinp': 'K*,R*'][params.enzyme]
@@ -456,7 +458,7 @@ workflow {
     }
 
     // If no output params are given, output only the last step, i.e. report
-    outputreport = params.outputreport || (!params.outputlib && !params.outputquant && !params.outputreport)
+    outputreport = params.outputreport || (!params.output_pred_lib && !params.output_emp_lib && !params.outputquant && !params.outputreport)
     if (outputreport || params.outputquant) {
   
       // Pre-made quantfiles go into a channel
