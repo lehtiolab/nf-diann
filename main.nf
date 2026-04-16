@@ -70,7 +70,7 @@ cache 'lenient'
 
   output:
   path('quants/*.quant'), emit: quants
-  path('search_predicted_lib.log'), emit: log
+  path("${raws[0]}_search_predicted_lib.log"), emit: log
 
   script:
   """
@@ -107,7 +107,7 @@ cache 'lenient'
       | tee stdout.bak
     grep ERROR stdout.bak && exit 1
 
-    mv report.log.txt search_predicted_lib.log
+    mv report.log.txt ${raws[0]}_search_predicted_lib.log
   """
 }
 
@@ -175,7 +175,7 @@ process RunDiaAnalysis {
   
   output:
   tuple val(ids), path(raws), path('quants/*.quant'), emit: rawquants
-  path('search_empirical_lib.log'), emit: log
+  path("${raws[0]}_search_empirical_lib.log"), emit: log
 
   script:
   """
@@ -211,7 +211,7 @@ process RunDiaAnalysis {
       | tee stdout.bak
     grep ERROR stdout.bak && exit 1
 
-    mv report.log.txt search_empirical_lib.log
+    mv report.log.txt ${raws[0]}_search_empirical_lib.log
   """
 }
 
