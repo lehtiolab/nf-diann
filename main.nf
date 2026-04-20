@@ -38,7 +38,6 @@ cache 'lenient'
     ${diannparams.ntermmetex ? '--met-excision' : ''} \
     ${diannparams.ntermac ? '--var-mod UniMod:1,42.010565,*n' : ''} \
     ${diannparams.idstonames ? '--ids-to-names' : ''} \
-    --pg-level ${diannparams.pglvl} \
     --min-pr-charge ${diannparams.mincharge} \
     --max-pr-charge ${diannparams.maxcharge} \
     --min-pep-len ${diannparams.minpeplen} \
@@ -47,15 +46,14 @@ cache 'lenient'
     --max-pr-mz ${diannparams.maxmz} \
     --min-fr-mz ${diannparams.minfrmz} \
     --max-fr-mz ${diannparams.maxfrmz} \
+    --mass-acc-ms1 $diannparams.ms1acc \
+    --mass-acc $diannparams.ms2acc \
     ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''} \
       | tee stdout.bak
     grep ERROR stdout.bak && exit 1
 
     mv library.log.txt insilico_predict_lib.log
     # Is this used in predict from fasta, but maybe test this:
-    #${diannparams.window ? "--window $diannparams.window" : ''} \
-    #--mass-acc-ms1 $diannparams.ms1acc \
-    #--mass-acc $diannparams.ms2acc \
     """
 }
 
