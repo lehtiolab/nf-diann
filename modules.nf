@@ -38,6 +38,9 @@ def create_info_map(info_fn, possible_params) {
   def params_not_header = possible_params - header
 
   def info_map = [:]
+  def fpath
+  def key_fn
+  def tmp_fn
   info.findAll{ it[0][0] != '#' }.eachWithIndex { it, ix ->
     tmp_fn = [:]
     header.eachWithIndex{ hfield, hix ->
@@ -58,10 +61,10 @@ def create_info_map(info_fn, possible_params) {
 
 
 def identify_info_map(info_fn) {
-  expected_fields = ["file_path", "create_lib", "train_quantums", "quantfile"]
+  def expected_fields = ["file_path", "create_lib", "train_quantums", "quantfile"]
   def samples = create_info_map(info_fn, expected_fields)
   // Set all files to go to lib create if none specified (and no params.library passed)
-  new_samples = samples
+  def new_samples = samples
   if (!samples.findAll { k,v -> v.create_lib as Integer }) {
     samples.each { k,v ->
       new_samples[k].create_lib = 1

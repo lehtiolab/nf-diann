@@ -2,9 +2,7 @@
 
 include { paramsSummaryMap } from 'plugin/nf-schema'
 
-import groovy.io.FileType
-
-include { identify_info_map; listify } from './modules.nf' 
+include { identify_info_map; listify; read_header } from './modules.nf' 
 //include { REPORTING } from './workflows/reporting.nf'
 
 
@@ -12,7 +10,8 @@ include { identify_info_map; listify } from './modules.nf'
 process predictFastaLibrary {
 cache 'lenient'
 
-  container "ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1"
+  tag 'diann'
+  container params.__containers[task.tag][workflow.containerEngine]
   
   input:
   tuple path(fasta, arity: '1..*'), val(diannparams)
@@ -61,7 +60,8 @@ cache 'lenient'
 process searchWithPredictedLib {
 cache 'lenient'
 
-  container "ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1"
+  tag 'diann'
+  container params.__containers[task.tag][workflow.containerEngine]
   
   input:
   tuple path(predlib), path(raws, arity: '1..*'), path(fasta), val(diannparams)
@@ -71,6 +71,9 @@ cache 'lenient'
   path("${raws[0]}_search_predicted_lib.log"), emit: log
 
   script:
+  raws_actual = []
+  raws.each { it.isDirectory() ?  it.toRealPath().eachFileMatch('analysis.tdf_bin') { raws_actual << it } : raws_actual << it   }
+  
   """
   mkdir quants
   # Empirical library by running it with raws
@@ -111,7 +114,9 @@ cache 'lenient'
 
 
 process combineEmpiricalLibraryRuns {
-  container "ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1"
+
+  tag 'diann'
+  container params.__containers[task.tag][workflow.containerEngine]
 
   input:
   tuple path('quants/*'), path(predlib), path(raws, arity: '1..*'), path(fasta), val(diannparams)
@@ -121,6 +126,9 @@ process combineEmpiricalLibraryRuns {
   path('create_empirical_lib.log'), emit: log
   
   script:
+  raws_actual = []
+  raws.each { it.isDirectory() ?  it.toRealPath().eachFileMatch('analysis.tdf_bin') { raws_actual << it } : raws_actual << it }
+
   """
   # Empirical library by running it with raws
   diann-linux --threads ${task.cpus} \
@@ -166,7 +174,8 @@ process RunDiaAnalysis {
 
   // "Second pass" after creating the library, manual MBR
   // No reports are output, only quant files
-  container "ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1"
+  tag 'diann'
+  container params.__containers[task.tag][workflow.containerEngine]
 
   input:
   tuple val(ids), path(raws, arity: '1..*'), path(lib), path(fasta), val(diannparams)
@@ -176,6 +185,8 @@ process RunDiaAnalysis {
   path("${raws[0]}_search_empirical_lib.log"), emit: log
 
   script:
+  raws_actual = []
+  raws.each { it.isDirectory() ?  it.toRealPath().eachFileMatch('analysis.tdf_bin') { raws_actual << it } : raws_actual << it }
   """
   mkdir quants
   diann-linux --threads ${task.cpus} \
@@ -220,7 +231,8 @@ process TrainQuantUMS {
   the full log into the next process .command.sh instead of only the params
   */
 
-  container "ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1"
+  tag 'diann'
+  container params.__containers[task.tag][workflow.containerEngine]
 
   input:
   tuple path(raws, arity: '1..*'), path('quants/*'), path(lib), path(fasta), val(diannparams)
@@ -230,6 +242,8 @@ process TrainQuantUMS {
   path('train_quantums.log'), emit: log
 
   script:
+  raws_actual = []
+  raws.each { it.isDirectory() ?  it.toRealPath().eachFileMatch('analysis.tdf_bin') { raws_actual << it } : raws_actual << it }
   paramline = '.*Quantification parameters:' 
   """
   diann-linux --threads ${task.cpus} \
@@ -271,7 +285,8 @@ process TrainQuantUMS {
 
 process DiaQuantificationReport {
 
-  container "ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1"
+  tag 'diann'
+  container params.__containers[task.tag][workflow.containerEngine]
 
   input:
   tuple path(raws, arity: '1..*'), path('quants/*'), path(lib), path(fasta), val(diannparams), val(quantparams)
@@ -281,6 +296,8 @@ process DiaQuantificationReport {
   path('quantify_report.log'), emit: log
 
   script:
+  raws_actual = []
+  raws.each { it.isDirectory() ?  it.toRealPath().eachFileMatch('analysis.tdf_bin') { raws_actual << it } : raws_actual << it }
   """
   diann-linux --threads ${task.cpus} \
     ${raws.collect { "--f \$(realpath $it)"}.join(' ') } \
@@ -337,6 +354,64 @@ process logConcat {
   """
 }
 
+
+params {
+  __containers : Map = new groovy.json.JsonSlurper().parseText(new File("${baseDir}/containers.json").text)
+
+  test = false
+  raw = ''
+  mzml = ''
+  library = ''
+  tdb = Path
+  input = Path
+
+  // DIANN
+  ms1acc = false // maybe set to 10 for orbitrap, 15 for TIMS
+  ms2acc = false // maybe 4 for orbi astral, 15 for TIMS
+  window = false
+  varmods = 'UniMod:35,15.994915,M' // Oxidation, add more with separator ;
+  fixmods = 'UniMod:4,57.021464,C' // Carbamidomethyl, add more with separator ;
+  ntermmetexcision = false
+  ntermacetyl = false
+  maxvarmods = 2
+  miscleav = 1
+  precconflvl = 0.01  // --matrix-qvalue, matrix filtering q-value for precursors
+  proteinconflvl = 0.01  // --matrix-spec-q, specific protein q-value
+  mincharge = 2  // --max-pr-charge
+  maxcharge = 4  // --max-pr-charge
+  minmz = 300 // --min-pr-mz TIMS, orbi typical 380
+  maxmz = 1300 // --max-pr-mz TIMS, orbi typical 980
+  minfragmz = 200 // --min-fr-mz
+  maxfragmz = 1800 // --max-fr-mz
+  minpeplen = 8 // --min-pep-len
+  maxpeplen = 40 // --max-pep-len
+  nonorm = false // --no-norm
+  proteotypicity = 2 // --pg-level 2=genes, 0=isoforms2, 1=protein names
+  ids_to_names = false // --ids-to-names for when using isoforms
+  enzyme = 'trypsin' // trypsin, trypsinp (cuts after P)
+  exclude_contaminants = false // --cont-quant-exclude TAG, e.g. cRAP-
+  individual_massacc = false // cannot specify mass accuracy if using this, also not recommended with reusing quantfiles
+  individual_windows = false // cannot specify mass accuracy if using this, also not recommended with reusing quantfiles
+
+  // peptidoforms (automatically on when variable mods)
+
+  // Per-file inputs FIXME better names!
+  create_lib = false
+  train_quantums = false
+  quantfile = false
+
+  // Infra
+  batchsize = 0 // 0: all files in same batch
+  quantdir = false
+
+  // Outputs
+  output_pred_lib = false
+  output_emp_lib = false
+  outputquant = false
+  outputreport = false
+}
+
+
 workflow {
   main:
   // FIXME
@@ -384,17 +459,14 @@ workflow {
     def infiles = identify_info_map(params.input)
     batchsize = params.batchsize && params.batchsize < infiles.size() ? params.batchsize : false
 
-    channel.fromList(infiles.collect { k,v -> [k, v]})
-    | map { [it[0], it[1].file_path] } // mapkey, file
-    | branch { 
+    raw_c = channel.fromList(infiles.collect { k,v -> [k, v]})
+    .map { [it[0], it[1].file_path] } // mapkey, file
+    .branch { 
       thermo: it[1].extension == 'raw' 
       bruker: it[1].extension == 'd'
       }
-    | set { raw_c }
     
-    raw_c.thermo
-    | mix(raw_c.bruker)
-    | set { diann_in }
+    diann_in = raw_c.thermo.mix(raw_c.bruker)
   
     db_params = channel.fromPath(params.tdb)
       .toList()
@@ -426,18 +498,18 @@ workflow {
       passed_lib = channel.empty()
       predicted_lib = predictFastaLibrary(db_params)
 
-      predicted_lib.lib
-      | combine(batched_raws_to_emp_lib)
-      | searchWithPredictedLib
+      emplib_in = predicted_lib.lib.combine(batched_raws_to_emp_lib)
+      searchWithPredictedLib(emplib_in)
 
-      searchWithPredictedLib.out.quants
-      | flatten | toList | toList // combine all quant files in one big list
-      | combine(predicted_lib.lib)
-      | combine(all_raws_to_emp_lib.toList().toList())
-      | combine(db_params)
-      | combineEmpiricalLibraryRuns
-      combineEmpiricalLibraryRuns.out.lib
-      | set { empirical_lib }
+      all_emp_libs = searchWithPredictedLib.out.quants
+      .flatten()
+      .toList()
+      .toList() // combine all quant files in one big list
+      .combine(predicted_lib.lib)
+      .combine(all_raws_to_emp_lib.toList().toList())
+      .combine(db_params)
+      combineEmpiricalLibraryRuns(all_emp_libs)
+      empirical_lib = combineEmpiricalLibraryRuns.out.lib
 
     } else {
       predicted_lib = channel.empty().branch {
@@ -446,13 +518,12 @@ workflow {
       }
 
       passed_lib = channel.fromPath(params.library)
-      passed_lib 
-      | filter { it.extension == 'speclib' }
-      | combine(batched_raws_to_emp_lib)
-      | searchWithPredictedLib
-      searchWithPredictedLib.out.quants
-      | mix(passed_lib.filter { it.extension == 'parquet' })
-      | set { empirical_lib }
+      predlib_in = passed_lib 
+      .filter { it.extension == 'speclib' }
+      .combine(batched_raws_to_emp_lib)
+      searchWithPredictedLib(predlib_in)
+      empirical_lib = searchWithPredictedLib.out.quants
+      .mix(passed_lib.filter { it.extension == 'parquet' })
     }
 
     // If no output params are given, output only the last step, i.e. report
@@ -471,7 +542,7 @@ workflow {
       } else if (params.quantdir) {
         // If not and a quantdir is specified, try to match those with the raws by name
         def qfs = []
-        file(params.quantdir).traverse(type: FileType.FILES, maxDepth: 0) { qfs.add(it) }
+        file(params.quantdir).traverse(type: groovy.io.FileType.FILES, maxDepth: 0) { qfs.add(it) }
         tmp_q = channel.from(qfs).map { [file(it).baseName, file(it)] }
         channel.from(infiles.collect { k,v ->
               ["${v.file_path.baseName}_${v.file_path.extension}", k, v.file_path] })
@@ -499,20 +570,19 @@ workflow {
       	raw_without_q.toList().set { list_of_raw_wo_q }
       }
 
-      list_of_raw_wo_q
-      | transpose
-      | collate(2) // id, raw
-      | combine(empirical_lib)
-      | combine(db_params)
-      | RunDiaAnalysis
-      RunDiaAnalysis.out.rawquants
-      | map { [it[0], listify(it[1]), listify(it[2])] }
+      rundia_in = list_of_raw_wo_q
+      .transpose()
+      .collate(2) // id, raw
+      .combine(empirical_lib)
+      .combine(db_params)
+      RunDiaAnalysis(rundia_in)
+      new_raw_quants = RunDiaAnalysis.out.rawquants
+      .map { [it[0], listify(it[1]), listify(it[2])] }
       // first sort keys/raw files on raw basename
-      | map { it.transpose().sort({a,b -> a[1].baseName <=> b[1].baseName}).transpose() }
+      .map { it.transpose().sort({a,b -> a[1].baseName <=> b[1].baseName}).transpose() }
       // now sort non-matched quantfiles by basename so they match up
-      | map { [it[0], it[1], it[2].sort({a,b -> a.baseName <=> b.baseName})] }
-      | transpose
-      | set { new_raw_quants }
+      .map { [it[0], it[1], it[2].sort({a,b -> a.baseName <=> b.baseName})] }
+      .transpose()
 
     } else {
       new_raw_quants = channel.empty()
@@ -520,68 +590,66 @@ workflow {
   
     if (outputreport) {
       // Run training quantUMS and then full experiment
-      rawquantfiles
-      | filter { it[2] }
-      | mix(new_raw_quants)
-      | filter { infiles[it[0]].train_quantums as Integer == 1 }
-      | map { [it[1], it[2]] }
-      | toList
-      | transpose
-      | toList
-      | combine(empirical_lib)
-      | combine(db_params)
-      | TrainQuantUMS
+      trainq_in = rawquantfiles
+      .filter { it[2] }
+      .mix(new_raw_quants)
+      .filter { infiles[it[0]].train_quantums as Integer == 1 }
+      .map { [it[1], it[2]] }
+      .toList()
+      .transpose()
+      .toList()
+      .combine(empirical_lib)
+      .combine(db_params)
+      TrainQuantUMS(trainq_in)
 
-      rawquantfiles
-      | filter { it[2] }
-      | mix(new_raw_quants)
-      | map { [it[1], it[2]] }
-      | toList
-      | transpose
-      | toList
-      | combine(empirical_lib)
-      | combine(db_params)
-      | combine(TrainQuantUMS.out.params)
-      | DiaQuantificationReport
-      DiaQuantificationReport.out.report
-      | set { reports_out }
+      qreport_in = rawquantfiles
+      .filter { it[2] }
+      .mix(new_raw_quants)
+      .map { [it[1], it[2]] }
+      .toList()
+      .transpose()
+      .toList()
+      .combine(empirical_lib)
+      .combine(db_params)
+      .combine(TrainQuantUMS.out.params)
+      DiaQuantificationReport(qreport_in)
+      reports_out = DiaQuantificationReport.out.report
     } else {
       reports_out = channel.empty()
     }
 
 
   } else if (params.raw) {
-    channel.fromPath(params.raw)
-    | branch { 
+    raw_c = channel.fromPath(params.raw)
+    .branch { 
       thermo: it.extension == 'raw' 
       bruker: it.extension == 'd'
       }
-    | set { raw_c }
     mzml_c = channel.empty()
   
   } else if (params.mzml) {
-    mzml_c = channel.fromPath(mzml)
+    mzml_c = channel.fromPath(params.mzml)
     raw_c = channel.empty()
   }
 
   // sort logs
-  predicted_lib.log.map { [0, it] }
-  | mix(searchWithPredictedLib.out.log.map { [1, it] })
-  | mix(combineEmpiricalLibraryRuns.out.log.map { [2, it] })
-  | mix(RunDiaAnalysis.out.log.map { [3, it] })
-  | mix(TrainQuantUMS.out.log.map { [4, it] })
-  | mix(DiaQuantificationReport.out.log.map { [5, it] })
-  | toList
-  | map { it.sort({a,b -> a[0] <=> b[0]}) }
-  | transpose
-  | toList
-  | map { it[1] } // remove indices after sorting
-  | logConcat
-  | mix(predicted_lib.lib.filter { params.output_pred_lib })
-  | mix(combineEmpiricalLibraryRuns.out.lib.filter { params.output_emp_lib })
-  | mix(new_raw_quants.filter { params.outputquant }.map { it[2] })
-  | mix(reports_out)
-  | set { ch_wfoutputs }
+  ch_log_outputs = predicted_lib.log.map { [0, it] }
+  .mix(searchWithPredictedLib.out.log.map { [1, it] })
+  .mix(combineEmpiricalLibraryRuns.out.log.map { [2, it] })
+  .mix(RunDiaAnalysis.out.log.map { [3, it] })
+  .mix(TrainQuantUMS.out.log.map { [4, it] })
+  .mix(DiaQuantificationReport.out.log.map { [5, it] })
+  .toList()
+  .map { it.sort({a,b -> a[0] <=> b[0]}) }
+  .transpose()
+  .toList()
+  .map { it[1] } // remove indices after sorting
+
+  ch_wfoutputs = logConcat(ch_log_outputs)
+  .mix(predicted_lib.lib.filter { params.output_pred_lib })
+  .mix(combineEmpiricalLibraryRuns.out.lib.filter { params.output_emp_lib })
+  .mix(new_raw_quants.filter { params.outputquant }.map { it[2] })
+  .mix(reports_out)
 
   publish:
   wfoutputs = ch_wfoutputs
