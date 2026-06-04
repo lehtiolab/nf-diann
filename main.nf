@@ -3,8 +3,7 @@
 include { paramsSummaryMap } from 'plugin/nf-schema'
 
 include { identify_info_map; listify; read_header } from './modules.nf' 
-//include { REPORTING } from './workflows/reporting.nf'
-
+include { QC_REPORT } from './workflows/create_report.nf'
 
 
 process predictFastaLibrary {
@@ -289,10 +288,11 @@ process DiaQuantificationReport {
   container params.__containers[task.tag][workflow.containerEngine]
 
   input:
-  tuple path(raws, arity: '1..*'), path('quants/*'), path(lib), path(fasta), val(diannparams), val(quantparams)
+  tuple path(raws, arity: '1..*'), path('quants/*'), path(lib), path(fasta), val(diannparams), val(quantparams), val(enzyme)
   
   output:
   tuple path('report.parquet'), path('*.tsv'), emit: report
+  path('precursors.txt'), emit: precursors
   path('quantify_report.log'), emit: log
 
   script:
@@ -334,6 +334,7 @@ process DiaQuantificationReport {
     ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''} \
       | tee stdout.bak
     grep ERROR stdout.bak && exit 1
+    parquet_to_tsv.py report.parquet $enzyme
 
     mv report.log.txt quantify_report.log
   """
@@ -612,7 +613,18 @@ workflow {
       .combine(empirical_lib)
       .combine(db_params)
       .combine(TrainQuantUMS.out.params)
+      .map { it + [params.enzyme] }
       DiaQuantificationReport(qreport_in)
+
+      raws_ftypes = raw_c.bruker
+      .map { [it[1], 'bruker'] }
+      .concat(raw_c.thermo
+        .map { [it[1], 'thermo'] }
+      )
+      input_to_qc = channel.fromPath(params.input) 
+      QC_REPORT(raws_ftypes, input_to_qc, DiaQuantificationReport.out.precursors, params.proteinconflvl)
+
+
       reports_out = DiaQuantificationReport.out.report
     } else {
       reports_out = channel.empty()
@@ -646,6 +658,7 @@ workflow {
   .map { it[1] } // remove indices after sorting
 
   ch_wfoutputs = logConcat(ch_log_outputs)
+  .mix(QC_REPORT.out)
   .mix(predicted_lib.lib.filter { params.output_pred_lib })
   .mix(combineEmpiricalLibraryRuns.out.lib.filter { params.output_emp_lib })
   .mix(new_raw_quants.filter { params.outputquant }.map { it[2] })
