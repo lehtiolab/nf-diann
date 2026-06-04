@@ -10,7 +10,7 @@ process predictFastaLibrary {
 cache 'lenient'
 
   tag 'diann'
-  container params.__containers[task.tag][workflow.containerEngine]
+  container Containers.containers[task.tag][workflow.containerEngine]
   
   input:
   tuple path(fasta, arity: '1..*'), val(diannparams)
@@ -60,7 +60,7 @@ process searchWithPredictedLib {
 cache 'lenient'
 
   tag 'diann'
-  container params.__containers[task.tag][workflow.containerEngine]
+  container Containers.containers[task.tag][workflow.containerEngine]
   
   input:
   tuple path(predlib), path(raws, arity: '1..*'), path(fasta), val(diannparams)
@@ -115,7 +115,7 @@ cache 'lenient'
 process combineEmpiricalLibraryRuns {
 
   tag 'diann'
-  container params.__containers[task.tag][workflow.containerEngine]
+  container Containers.containers[task.tag][workflow.containerEngine]
 
   input:
   tuple path('quants/*'), path(predlib), path(raws, arity: '1..*'), path(fasta), val(diannparams)
@@ -174,7 +174,7 @@ process RunDiaAnalysis {
   // "Second pass" after creating the library, manual MBR
   // No reports are output, only quant files
   tag 'diann'
-  container params.__containers[task.tag][workflow.containerEngine]
+  container Containers.containers[task.tag][workflow.containerEngine]
 
   input:
   tuple val(ids), path(raws, arity: '1..*'), path(lib), path(fasta), val(diannparams)
@@ -231,7 +231,7 @@ process TrainQuantUMS {
   */
 
   tag 'diann'
-  container params.__containers[task.tag][workflow.containerEngine]
+  container Containers.containers[task.tag][workflow.containerEngine]
 
   input:
   tuple path(raws, arity: '1..*'), path('quants/*'), path(lib), path(fasta), val(diannparams)
@@ -285,7 +285,7 @@ process TrainQuantUMS {
 process DiaQuantificationReport {
 
   tag 'diann'
-  container params.__containers[task.tag][workflow.containerEngine]
+  container Containers.containers[task.tag][workflow.containerEngine]
 
   input:
   tuple path(raws, arity: '1..*'), path('quants/*'), path(lib), path(fasta), val(diannparams), val(quantparams), val(enzyme)
@@ -342,6 +342,7 @@ process DiaQuantificationReport {
 
 
 process logConcat {
+  tag 'local'
 
   input:
   path(logs)
@@ -356,61 +357,6 @@ process logConcat {
 }
 
 
-params {
-  __containers : Map = new groovy.json.JsonSlurper().parseText(new File("${baseDir}/containers.json").text)
-
-  test = false
-  raw = ''
-  mzml = ''
-  library = ''
-  tdb = Path
-  input = Path
-
-  // DIANN
-  ms1acc = false // maybe set to 10 for orbitrap, 15 for TIMS
-  ms2acc = false // maybe 4 for orbi astral, 15 for TIMS
-  window = false
-  varmods = 'UniMod:35,15.994915,M' // Oxidation, add more with separator ;
-  fixmods = 'UniMod:4,57.021464,C' // Carbamidomethyl, add more with separator ;
-  ntermmetexcision = false
-  ntermacetyl = false
-  maxvarmods = 2
-  miscleav = 1
-  precconflvl = 0.01  // --matrix-qvalue, matrix filtering q-value for precursors
-  proteinconflvl = 0.01  // --matrix-spec-q, specific protein q-value
-  mincharge = 2  // --max-pr-charge
-  maxcharge = 4  // --max-pr-charge
-  minmz = 300 // --min-pr-mz TIMS, orbi typical 380
-  maxmz = 1300 // --max-pr-mz TIMS, orbi typical 980
-  minfragmz = 200 // --min-fr-mz
-  maxfragmz = 1800 // --max-fr-mz
-  minpeplen = 8 // --min-pep-len
-  maxpeplen = 40 // --max-pep-len
-  nonorm = false // --no-norm
-  proteotypicity = 2 // --pg-level 2=genes, 0=isoforms2, 1=protein names
-  ids_to_names = false // --ids-to-names for when using isoforms
-  enzyme = 'trypsin' // trypsin, trypsinp (cuts after P)
-  exclude_contaminants = false // --cont-quant-exclude TAG, e.g. cRAP-
-  individual_massacc = false // cannot specify mass accuracy if using this, also not recommended with reusing quantfiles
-  individual_windows = false // cannot specify mass accuracy if using this, also not recommended with reusing quantfiles
-
-  // peptidoforms (automatically on when variable mods)
-
-  // Per-file inputs FIXME better names!
-  create_lib = false
-  train_quantums = false
-  quantfile = false
-
-  // Infra
-  batchsize = 0 // 0: all files in same batch
-  quantdir = false
-
-  // Outputs
-  output_pred_lib = false
-  output_emp_lib = false
-  outputquant = false
-  outputreport = false
-}
 
 
 workflow {
@@ -666,6 +612,59 @@ workflow {
 
   publish:
   wfoutputs = ch_wfoutputs
+
+  onComplete:
+  if (workflow.success) {
+    def libfile = file("${workflow.outputDir}/libs.js")
+    def libs = libfile.readLines()
+    def bulma = file("${baseDir}/assets/bulma.js").readLines()
+    def psmap = paramsSummaryMap(workflow)
+
+    if (params.input && file(params.input).exists()) {
+      inputraws = identify_info_map(params.input)
+      def files_header = read_header(params.input)
+      files_header[0] = 'file_path'
+      infiles = inputraws.collect { k, fn -> files_header.collect { fn[it] }}
+      infiles.add(0, files_header)
+    } else {
+      infiles = [[], []]
+    }
+
+    // Get processes tags used from trace to output the software versions used in pipeline
+    def x = file("execution_trace.txt").readLines()[1..-1]
+      .collect { it.tokenize('\t')[4] } // get process tag
+      .grep { it != 'local' }
+      .unique()
+    def sw_versions = file("execution_trace.txt").readLines()[1..-1]
+      .collect { it.tokenize('\t')[4] } // get process tag
+      .grep { it != 'local' }
+      .unique()
+      .collect { [it, Containers.containers[it].version, Containers.containers[it][workflow.containerEngine]] }
+    // The above crashes this handler in case the tag (software) is not defined in the lib/containers.groovy
+      
+    // Set the name of the workflow
+    // if not wf.runName (-name or auto) is like "crazy_euler" or other "{adjective}_{scientist}"
+    if (!params.name && !(workflow.runName ==~ /[a-z]+_[a-z]+/) ) {
+      runname = workflow.runName
+    } else if (!params.name) {
+      runname = 'untitled'
+    } else {
+      runname = params.name
+    }
+    def fields = [runname: runname,
+        sw_versions: sw_versions,
+        params: psmap['Other parameters'],
+        infiles: infiles,
+        libs: libs, bulma: bulma]
+    def rf = new File("${workflow.outputDir}/report_groovy_template.html")
+    def temp_engine = new groovy.text.StreamingTemplateEngine()
+    def report_template = temp_engine.createTemplate(rf).make(fields)
+    def report_html = report_template.toString()
+    def output_rf = new File( "${workflow.outputDir}/report.html" )
+    output_rf.withWriter { w -> w << report_html }
+    rf.delete()
+    libfile.delete()
+  }
 }
 
 output {
