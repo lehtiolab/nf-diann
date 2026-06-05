@@ -154,7 +154,7 @@
       {% for plotname in precplots %}
       <div class="columns">
         {% for sf in ['sample', 'file'] %}
-        {% if precplots[plotname][sf] %}
+        {% if sf in precplots[plotname] and precplots[plotname][sf] %}
         <div class="column">
           <h4 class="title is-4">{{ precplots[plotname][sf].title }} per {{ sf }}</h4>
           {{ precplots[plotname][sf].plot }}
@@ -163,6 +163,27 @@
         {% endfor %}
       </div>
       {% endfor %}
+
+      <div class="columns">
+        <div class="column">
+          <h4 class="title is-4">{{ precplots['precerror.html'].title }}</h4>
+          {{ precplots['precerror.html'].plot }}
+        </div>
+        <div class="column">
+          <h4 class="title is-4">{{ precplots['retentiontime.html'].title }}</h4>
+          {{ precplots['retentiontime.html'].plot }}
+        </div>
+      </div>
+      <div class="columns">
+        <div class="column">
+          <h4 class="title is-4">{{ precplots['precquant.html'].title }}</h4>
+          {{ precplots['precquant.html'].plot }}
+        </div>
+        <div class="column">
+          <h4 class="title is-4">{{ precplots['peakwidth.html'].title }}</h4>
+          {{ precplots['peakwidth.html'].plot }}
+        </div>
+      </div>
     </div>
 
     <div id="featqcpage" class="mt-5 container">

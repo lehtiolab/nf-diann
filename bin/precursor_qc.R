@@ -53,7 +53,6 @@ boxplot_stats = function(data, col) {
 
 amount_ms2 = read.table("filescans", sep="\t", header=F)
 colnames(amount_ms2) = c('file', 'nr_scans')
-amount_ms2$file = gsub('[^A-Za-z0-9_]', '.', amount_ms2$file)
 nr_verts = length(unique(amount_ms2[[1]]))
 vert_height = 200 * nr_verts + 200
 
@@ -65,15 +64,14 @@ colmap = list(
 ptypes = list(
   retentiontime=c(rtcol, 'time(min)'),
   precerror=c(precerrcol, 'Precursor error (ppm)'),
-  precquant=c(precquantcol, 'MS1 quant'),
-  peakwidth=c(peakwidthcol, 'FWHM'),
-  ms2quant=c(ms2quantcol, 'MS2 quant')
+  precquant=c(precquantcol, 'Quantity'),
+  peakwidth=c(peakwidthcol, 'FWHM')
+  # Is there no # of fragments data in DIANN?
 )
 
 
 for (grouper in names(colmap)) {
   xcol =  colmap[[grouper]][1]
-  precs_labeled[,xcol] = gsub('[^A-Za-z0-9_]', '.', precs_labeled[,xcol])
   precursors = aggregate(precs_labeled[c(seqcol)], by=precs_labeled[xcol], length)
   names(precursors) = c(grouper, 'precursorcount')
 
@@ -84,20 +82,24 @@ for (grouper in names(colmap)) {
   miscleav = subset(miscleav, missed_cleavage %in% c(0,1,2))
   if (grouper == 'file') {
     fake_3_mc = data.frame(missed_cleavage=3, file=unique(miscleav$file), nrprec=0, text=unique(miscleav$file))
-    miscleav = rbind(miscleav, fake_3_mc)
+    miscleav_plot = rbind(miscleav, fake_3_mc)
     precursors = merge(precursors, amount_ms2, by=grouper)
-    precursors$perc_id = precursors$precursorcount / precursors$nr_scans * 100
+  } else {
+    miscleav_plot = miscleav
   }
+
   miscleav = merge(precursors, miscleav, by=grouper)
+  miscleav_plot = merge(precursors, miscleav_plot, by=grouper)
   miscleav$percent = miscleav$nrprec / miscleav$precursorcount * 100
+  miscleav_plot$percent = miscleav_plot$nrprec / miscleav_plot$precursorcount * 100
   if (grouper == 'file') {
     mc_text_y = 50
     mc_text_size = 3
     write.table(precursors, glue('{grouper}__counttable_qc.txt'), row.names=F, quote=F, sep='\t')
     write.table(miscleav, glue('{grouper}__miscleav_qc.txt'), row.names=F, quote=F, sep='\t')
   } else {
-    miscleav$percent = miscleav$nrprec / miscleav$precursorcount * 100
-    mc_text_y = max(miscleav$percent) * 2/6
+    miscleav_plot$percent = miscleav_plot$nrprec / miscleav_plot$precursorcount * 100
+    mc_text_y = max(miscleav_plot$percent) * 2/6
     mc_text_size = 4
   }
   
@@ -108,7 +110,7 @@ for (grouper in names(colmap)) {
     ylab('# precursors') + 
     theme_bw() + 
     theme(axis.title.x=element_text(size=15), axis.title.y=element_blank(),
-          axis.text.x=element_text(size=10, angle=90),
+          axis.text.x=element_text(size=10),
           legend.text=element_text(size=10), legend.title=element_blank())
     if (grouper == 'file') {
       # plotly doesnt support hjust, so calculate position to be in middle
@@ -125,8 +127,8 @@ for (grouper in names(colmap)) {
   htmlwidgets::saveWidget(p, glue('precursorplothtml/{grouper}__amount_precursors.html'), selfcontained=F)
 
   ## Missed cleavages plot
-  miscleav$missed_cleavage = as.factor(miscleav$missed_cleavage)
-  mcplot = ggplot(miscleav) +
+  miscleav_plot$missed_cleavage = as.factor(miscleav_plot$missed_cleavage)
+  mcplot = ggplot(miscleav_plot) +
       geom_bar(aes(x=.data[[grouper]], y=percent, fill=missed_cleavage, group=missed_cleavage), position='dodge', stat='identity') +
       # 0.9 is the default dodge (90% of 1, 1 used bc all same value) but when not spec -> no dodge at all?
       geom_text(position=position_dodge(width=0.9), aes(x=.data[[grouper]], y=mc_text_y, group=missed_cleavage, label=text), colour="black", size=mc_text_size, inherit.aes=T) +
@@ -147,34 +149,33 @@ for (grouper in names(colmap)) {
           layout(legend = list(orientation = 'h', x = 0, y = 1.1, xanchor='left', yanchor='bottom'))
   p$x$layout$legend$title$text = ''
   htmlwidgets::saveWidget(p, glue('precursorplothtml/{grouper}__missed_cleavages.html'), selfcontained=F)
+}
 
-  for (ptype in names(ptypes)) {
-    if (ptypes[[ptype]][1] %in% colnames(precs_labeled)) {
-      summary_stats <- precs_labeled[c(xcol, ptypes[[ptype]][1])] %>%
-        group_by(.data[[xcol]]) %>%
-        boxplot_stats(.data[[ptypes[[ptype]][1]]])
+for (ptype in names(ptypes)) {
+  if (ptypes[[ptype]][1] %in% colnames(precs_labeled)) {
+    summary_stats <- precs_labeled[c(xcol, ptypes[[ptype]][1])] %>%
+      group_by(.data[[xcol]]) %>%
+      boxplot_stats(.data[[ptypes[[ptype]][1]]])
 
-      # Plot using geom_crossbar, geom_errorbar
-      ggp = ggplot(summary_stats, aes(x=.data[[ xcol ]], y=middle)) +
-        geom_errorbar(aes(ymin = whisk_min, ymax = whisk_max), position=position_dodge(width=1) ) +
-        geom_crossbar(aes(ymin = lower, ymax=upper), fill='white', linewidth=0.15,
-          position=position_dodge(width=1)) + coord_flip() + theme_bw() +
-        ylab(ptypes[[ptype]][2]) + 
-        theme(axis.title=element_text(size=15), axis.title.y=element_blank(),
-          axis.text.x=element_text(size=10))
-      if (ptype == 'precerror') { ggp = ggp + geom_hline(yintercept=0, size=2) }
-      if (grouper == 'file') {
-        # plotly doesnt support hjust, so calculate position to be in middle
-        ggp = ggp + theme(axis.text.y=element_blank()) + 
-          geom_text(aes(x=.data[[xcol]], y=(get('whisk_min') + get('whisk_max')) / 2, label=.data[[xcol]]), position=position_nudge(x=0.1), size=3, colour="black")
-      } else {
-        ggp = ggp + theme(axis.text.y=element_text(size=10, angle=90))
-      }
-     p = ggplotly(ggp, width=600, height=vert_height)
-     htmlwidgets::saveWidget(p, glue('precursorplothtml/{grouper}__{ptype}.html'), selfcontained=F)
-    }
+    summary_stats$Run = as.character(summary_stats$Run)
+    sumstats_samples = merge(summary_stats, inputfn[,c('Run', samplecol)], by='Run', all=TRUE)
+
+    # Plot using geom_crossbar, geom_errorbar
+    ggp = ggplot(sumstats_samples, aes(x=sample, y=middle, file=Run)) +
+      geom_errorbar(aes(ymin = whisk_min, ymax = whisk_max), width=0) +
+      geom_crossbar(aes(ymin = lower, ymax=upper), fill='white', linewidth=0.15) +
+      coord_flip() + theme_bw() +
+      ylab(ptypes[[ptype]][2]) + 
+      theme(axis.title=element_text(size=15), axis.title.y=element_blank(),
+        axis.text.x=element_text(size=10), axis.text.y=element_text(angle=90)) +
+      # plotly doesnt support hjust, so calculate position to be in middle
+      geom_text(aes(x=sample, y=(get('whisk_min') + get('whisk_max')) / 2, label=.data[[xcol]]), position=position_nudge(x=0.1), size=3, colour="black")
+    if (ptype == 'precerror') { ggp = ggp + geom_hline(yintercept=0, size=1, color='green3', linetype='dashed') }
+    p = ggplotly(ggp, width=600, height=vert_height)
+    htmlwidgets::saveWidget(p, glue('precursorplothtml/{ptype}.html'), selfcontained=F)
   }
 }
+
 
 
 #### Precursor table also contains protein/gene group data, so do all in single script
@@ -241,11 +242,18 @@ for (feattype in names(featmap)) {
   htmlwidgets::saveWidget(p, glue('{feattype}plothtml/nrfeats.html'), selfcontained=F)
 
   # Overlap text for nr feats plot (actual text in HTML!)
-  wide_feats = pivot_wider(feats, id_cols=.data[[featcol]], names_from=Run, values_from=.data[[quantcol]])
-  wide_feats[wide_feats==0] = NA
-  overlap = nrow(na.exclude(wide_feats))
-  writeLines(c(glue('Overlap for all sets: {overlap}'), glue('Total identified: {nrow(wide_feats)}')),
-	     glue('{feattype}plothtml/nrfeats__text.html'))
+  wide_feats_qval = pivot_wider(feats, id_cols=.data[[featcol]], names_from=Run, values_from=.data[[featfiltcol]])
+  wide_feats_quant = pivot_wider(feats, id_cols=.data[[featcol]], names_from=Run, values_from=.data[[quantcol]])
+  wide_feats_quant[wide_feats_quant==0] = NA
+  wide_feats_qval[[featcol]] = NULL
+  overlap_q = nrow(na.exclude(wide_feats_quant))
+  overlap_qval = nrow(na.exclude(wide_feats_qval))
+  # remove rows with all NA for total feat nr
+  total_w_any_qval = nrow(wide_feats_qval[rowSums(is.na(wide_feats_qval)) < ncol(wide_feats_qval),])
+  writeLines(c(glue('Overlap for all runs: {overlap_qval}'),
+    glue('Overlap for all runs with quant: {overlap_q}'),
+    glue('Total identified: {total_w_any_qval}')),
+    glue('{feattype}plothtml/nrfeats__text.html'))
 
 
   # Feature count plot
@@ -268,8 +276,8 @@ for (feattype in names(featmap)) {
 
     # Plot using geom_crossbar, geom_errorbar
     ggp = ggplot(summary_stats, aes(x=sample, y=middle, file=Run)) +
-      geom_errorbar(aes(ymin = whisk_min, ymax = whisk_max), position=position_dodge(width=1) ) +
-      geom_crossbar(aes(ymin = lower, ymax=upper), fill='white', linewidth=0.15, position=position_dodge(width=1)) +
+      geom_errorbar(aes(ymin = whisk_min, ymax = whisk_max), width=0) +
+      geom_crossbar(aes(ymin = lower, ymax=upper), fill='white', linewidth=0.15) +
       coord_flip() + ylab(ptypes[[ptype]][2]) + theme_bw() + 
       ylab(col_to_plot) +
       theme(axis.title.x=element_text(size=15), axis.title.y=element_blank(),

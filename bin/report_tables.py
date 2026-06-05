@@ -42,10 +42,12 @@ def get_plotly_html(fn):
 # Precursor plots
 precplotfns = {'amount_precursors.html': '# of precursors',
         'missed_cleavages.html': '# of missed cleavages',
+        }
+precboxplots = {
         'retentiontime.html': 'Retention time',
-        'precquant.html': 'MS1 quant',
-        'fragquant.html': 'MS2 quant',
-        'fragcount.html': '# of fragments',
+        'precquant.html': 'Quantified precursors',
+        'peakwidth.html': 'Peak width',
+        'precerror.html': 'Precursor error',
         }
 
 precplots = {}
@@ -58,6 +60,12 @@ for plotname in precplotfns:
         pfile = os.path.join(pdir, f'{samfile}__{plotname}')
         if os.path.exists(pfile):
             plot[samfile] = {'title': precplotfns[plotname], 'plot': get_plotly_html(pfile)}
+    precplots[plotname] = plot
+for plotname in precboxplots:
+    plot = {}
+    pfile = os.path.join(pdir, plotname)
+    if os.path.exists(pfile):
+        plot = {'title': precboxplots[plotname], 'plot': get_plotly_html(pfile)}
     precplots[plotname] = plot
 
 # Protein/gene plots
@@ -138,7 +146,6 @@ tabletitles = {
         #'Non-shared (unique)': 'Peptides (unique, 1%FDR)',
         'precursorcount': '# precursors',
         'nr_scans': '# MS2 scans',
-        'perc_id': '% identified',
         }
 summary_field_order = ['Label', 'precursorcount', 'nr_of_genes', 'nr_scans', 'perc_id',
         ]
