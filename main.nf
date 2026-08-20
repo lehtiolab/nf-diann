@@ -70,9 +70,6 @@ cache 'lenient'
   path("${raws[0]}_search_predicted_lib.log"), emit: log
 
   script:
-  raws_actual = []
-  raws.each { it.isDirectory() ?  it.toRealPath().eachFileMatch('analysis.tdf_bin') { raws_actual << it } : raws_actual << it   }
-  
   """
   mkdir quants
   # Empirical library by running it with raws
@@ -125,9 +122,6 @@ process combineEmpiricalLibraryRuns {
   path('create_empirical_lib.log'), emit: log
   
   script:
-  raws_actual = []
-  raws.each { it.isDirectory() ?  it.toRealPath().eachFileMatch('analysis.tdf_bin') { raws_actual << it } : raws_actual << it }
-
   """
   # Empirical library by running it with raws
   diann-linux --threads ${task.cpus} \
@@ -184,8 +178,6 @@ process RunDiaAnalysis {
   path("${raws[0]}_search_empirical_lib.log"), emit: log
 
   script:
-  raws_actual = []
-  raws.each { it.isDirectory() ?  it.toRealPath().eachFileMatch('analysis.tdf_bin') { raws_actual << it } : raws_actual << it }
   """
   mkdir quants
   diann-linux --threads ${task.cpus} \
@@ -241,8 +233,6 @@ process TrainQuantUMS {
   path('train_quantums.log'), emit: log
 
   script:
-  raws_actual = []
-  raws.each { it.isDirectory() ?  it.toRealPath().eachFileMatch('analysis.tdf_bin') { raws_actual << it } : raws_actual << it }
   paramline = '.*Quantification parameters:' 
   """
   diann-linux --threads ${task.cpus} \
@@ -296,8 +286,6 @@ process DiaQuantificationReport {
   path('quantify_report.log'), emit: log
 
   script:
-  raws_actual = []
-  raws.each { it.isDirectory() ?  it.toRealPath().eachFileMatch('analysis.tdf_bin') { raws_actual << it } : raws_actual << it }
   """
   diann-linux --threads ${task.cpus} \
     ${raws.collect { "--f \$(realpath $it)"}.join(' ') } \
