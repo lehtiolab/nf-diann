@@ -3,7 +3,7 @@ class Containers {
   public static containers = [
     diann: [
       version: '2.3.1',
-      singularity: 'oras://ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1',
+      singularity: 'docker://ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1',
       docker: 'ghcr.io/lehtiolab/nfhelaqc:3.2-diann.2.3.1',
     ],
     ddamsproteomics: [
