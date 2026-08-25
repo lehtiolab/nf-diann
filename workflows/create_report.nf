@@ -32,7 +32,7 @@ process getBrukerScanNumbers {
 
   script:
   """
-  ${raws.collect { "echo $it\$'\t'\$(sqlite3 ${it}/analysis.tdf 'SELECT COUNT(*) FROM Frames') >> nrscans"}.join(' && ')}
+  ${raws.collect { "echo ${it.baseName}\$'\t'\$(sqlite3 ${it}/analysis.tdf 'SELECT COUNT(*) FROM Frames') >> nrscans"}.join(' && ')}
   """
 }
 
