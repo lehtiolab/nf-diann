@@ -416,11 +416,13 @@ workflow {
       // Collate into batches if applicable
       all_raws_to_emp_lib
       .collate(batchsize)
+      .map { it.sort({a,b -> a.baseName <=> b.baseName}) }
       .set { list_of_raws }
     } else {
       // Run all in same proc, we need double toList so it will be a single item in the combine
       all_raws_to_emp_lib
       .toList()
+      .map { it.sort({a,b -> a.baseName <=> b.baseName}) }
       .toList()
       .set { list_of_raws }
     }
@@ -434,11 +436,13 @@ workflow {
       predicted_lib = predictFastaLibrary(db_params)
 
       emplib_in = predicted_lib.lib.combine(batched_raws_to_emp_lib)
+
       searchWithPredictedLib(emplib_in)
 
       all_emp_libs = searchWithPredictedLib.out.quants
       .flatten()
       .toList()
+      .map { it.sort({a,b -> a.baseName <=> b.baseName}) }
       .toList() // combine all quant files in one big list
       .combine(predicted_lib.lib)
       .combine(all_raws_to_emp_lib.toList().toList())
@@ -506,6 +510,7 @@ workflow {
       }
 
       rundia_in = list_of_raw_wo_q
+      .map { it.sort({a,b -> a[1].baseName <=> b[1].baseName}) }
       .transpose()
       .collate(2) // id, raw
       .combine(empirical_lib)
@@ -526,11 +531,12 @@ workflow {
     if (outputreport) {
       // Run training quantUMS and then full experiment
       trainq_in = rawquantfiles
-      .filter { it[2] }
-      .mix(new_raw_quants)
+      .filter { it[2] } // filter raws with supplied quants
+      .mix(new_raw_quants) // add new raw/quants
       .filter { infiles[it[0]].train_quantums as Integer == 1 }
       .map { [it[1], it[2]] }
       .toList()
+      .map { it.sort({ a,b -> a[0].baseName <=> b[0].baseName}) }
       .transpose()
       .toList()
       .combine(empirical_lib)
@@ -542,6 +548,7 @@ workflow {
       .mix(new_raw_quants)
       .map { [it[1], it[2]] }
       .toList()
+      .map { it.sort({ a,b -> a[0].baseName <=> b[0].baseName}) }
       .transpose()
       .toList()
       .combine(empirical_lib)
