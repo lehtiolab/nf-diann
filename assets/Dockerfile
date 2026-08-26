@@ -28,11 +28,11 @@ ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8
 
 # Download DIA-NN version <version>
-RUN wget https://github.com/vdemichev/DiaNN/releases/download/2.0/DIA-NN-2.3.1-Academia-Linux.zip -O /tmp/diann.Linux.zip
+RUN wget https://github.com/vdemichev/DiaNN/releases/download/2.0/DIA-NN-2.6.1-Academia-Linux.zip -O /tmp/diann.Linux.zip
 # Unzip the DIA-NN package
 RUN cd / && unzip /tmp/diann.Linux.zip
 RUN rm /tmp/diann.Linux.zip
 
 # Set appropriate permissions for the DIA-NN folder
-RUN chmod -R 775 /diann-2.3.1
-ENV PATH="${PATH}:/diann-2.3.1:/opt/conda/bin"
+RUN chmod -R 775 /diann-2.6.1
+ENV PATH="${PATH}:/diann-2.6.1:/opt/conda/bin"
