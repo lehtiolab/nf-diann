@@ -70,10 +70,12 @@ ptypes = list(
 )
 
 
+samplefnmap = unique(data.frame(file=precs_labeled[[filenamecol]], sample=precs_labeled[[samplecol]]))
 for (grouper in names(colmap)) {
   xcol =  colmap[[grouper]][1]
   precursors = aggregate(precs_labeled[c(seqcol)], by=precs_labeled[xcol], length)
   names(precursors) = c(grouper, 'precursorcount')
+  precursors = merge(precursors, samplefnmap, by=grouper, all=T)
 
   miscleav = aggregate(precs_labeled[c(seqcol)], by=precs_labeled[c(miscleavcol, xcol)], length)
   names(miscleav) = c('missed_cleavage', grouper, 'nrprec')
@@ -108,16 +110,18 @@ for (grouper in names(colmap)) {
     geom_bar(aes(x=.data[[grouper]], y=precursorcount), stat='identity', position='dodge') + 
     coord_flip() + 
     ylab('# precursors') + 
+    scale_x_discrete(labels=precursors[['sample']]) +
     theme_bw() + 
     theme(axis.title.x=element_text(size=15), axis.title.y=element_blank(),
           axis.text.x=element_text(size=10),
           legend.text=element_text(size=10), legend.title=element_blank())
     if (grouper == 'file') {
       # plotly doesnt support hjust, so calculate position to be in middle
-      ggp = ggp + theme(axis.text.y=element_blank()) + 
+      ggp = ggp +
         geom_text(aes(x=.data[[grouper]], y=precursorcount / 2, label=.data[[grouper]]), size=3, colour="white")
     } else {
-      ggp = ggp + theme(axis.text.y=element_text(size=10, angle=90))
+      ggp = ggp + theme(axis.text.y=element_text(size=10, angle=90)) +
+        geom_text(aes(x=.data[[grouper]], y=precursorcount / 2, label=precursorcount), size=10, colour="white")
     }
 
   p = ggplotly(ggp, width=600, height=vert_height) %>%
@@ -133,16 +137,11 @@ for (grouper in names(colmap)) {
       # 0.9 is the default dodge (90% of 1, 1 used bc all same value) but when not spec -> no dodge at all?
       geom_text(position=position_dodge(width=0.9), aes(x=.data[[grouper]], y=mc_text_y, group=missed_cleavage, label=text), colour="black", size=mc_text_size, inherit.aes=T) +
       ylim(c(0, 100)) + ylab('% of precursors') +
+      scale_x_discrete(labels=miscleav_plot[['sample']]) +
       theme_bw() +
       theme(axis.title.x=element_text(size=15), axis.title.y=element_blank(),
             legend.position="top", legend.text=element_text(size=10), legend.title=element_blank()) +
       coord_flip() 
-    if (grouper == 'file') {
-      # plotly doesnt support hjust, so calculate position to be in middle
-      mcplot = mcplot + theme(axis.text.y=element_blank())
-    } else {
-      mcplot = mcplot + theme(axis.text.y=element_text(size=10, angle=90))
-    }
 
 
   p = ggplotly(mcplot, width=600, height=vert_height) %>%
@@ -153,23 +152,24 @@ for (grouper in names(colmap)) {
 
 for (ptype in names(ptypes)) {
   if (ptypes[[ptype]][1] %in% colnames(precs_labeled)) {
-    summary_stats <- precs_labeled[c(xcol, ptypes[[ptype]][1])] %>%
-      group_by(.data[[xcol]]) %>%
+    summary_stats <- precs_labeled[c(filenamecol, ptypes[[ptype]][1])] %>%
+      group_by(.data[[filenamecol]]) %>%
       boxplot_stats(.data[[ptypes[[ptype]][1]]])
 
     summary_stats$Run = as.character(summary_stats$Run)
     sumstats_samples = merge(summary_stats, inputfn[,c('Run', samplecol)], by='Run', all=TRUE)
 
     # Plot using geom_crossbar, geom_errorbar
-    ggp = ggplot(sumstats_samples, aes(x=sample, y=middle, file=Run)) +
+    ggp = ggplot(sumstats_samples, aes(x=Run, y=middle)) +
       geom_errorbar(aes(ymin = whisk_min, ymax = whisk_max), width=0) +
       geom_crossbar(aes(ymin = lower, ymax=upper), fill='white', linewidth=0.15) +
+      scale_x_discrete(labels=sumstats_samples$sample) +
       coord_flip() + theme_bw() +
       ylab(ptypes[[ptype]][2]) + 
       theme(axis.title=element_text(size=15), axis.title.y=element_blank(),
         axis.text.x=element_text(size=10), axis.text.y=element_text(angle=90)) +
       # plotly doesnt support hjust, so calculate position to be in middle
-      geom_text(aes(x=sample, y=(get('whisk_min') + get('whisk_max')) / 2, label=.data[[xcol]]), position=position_nudge(x=0.1), size=3, colour="black")
+      geom_text(aes(x=Run, y=(get('whisk_min') + get('whisk_max')) / 2, label=Run), position=position_nudge(x=0.1), size=3, colour="black")
     if (ptype == 'precerror') { ggp = ggp + geom_hline(yintercept=0, size=1, color='green3', linetype='dashed') }
     p = ggplotly(ggp, width=600, height=vert_height)
     htmlwidgets::saveWidget(p, glue('precursorplothtml/{ptype}.html'), selfcontained=F)
@@ -204,18 +204,20 @@ for (feattype in names(featmap)) {
 
   # Missing features plot
   feats_missing = feats[feats[[quantcol]] <= 0,]
-  missing_per_run = aggregate(get(quantcol)~Run+sample, feats_missing, length)
-  colnames(missing_per_run)[3] = 'nr_missing'
+  missing_per_run = aggregate(get(quantcol)~Run, feats_missing, length)
+  colnames(missing_per_run)[2] = 'nr_missing'
+  missing_samples = merge(missing_per_run, inputfn[,c('Run', samplecol)], by='Run', all=TRUE)
   ggp = ggplot(missing_per_run) +
-    geom_bar(aes(x=sample, y=nr_missing), stat='identity', position='dodge') + 
+    geom_bar(aes(x=Run, y=nr_missing), stat='identity', position='dodge') + 
     coord_flip() + 
     ylab('# missing features') + 
+    scale_x_discrete(labels=missing_samples$sample) +
     theme_bw() + 
     theme(axis.title.x=element_text(size=15), axis.title.y=element_blank(),
           axis.text.x=element_text(size=10), axis.text.y=element_text(angle=90),
           legend.text=element_text(size=10), legend.title=element_blank()) +
     # plotly doesnt support hjust, so calculate position to be in middle
-    geom_text(aes(x=sample, y=nr_missing / 2, label=.data[[xcol]]), size=3, colour="white")
+    geom_text(aes(x=Run, y=nr_missing / 2, label=Run), size=3, colour="white")
   p = ggplotly(ggp, width=600, height=vert_height) %>%
           layout(legend = list(orientation = 'h', x = 0, y = 1.1, xanchor='left', yanchor='bottom'))
   # Work around since plotly does not honor above legend.title=element_blank call
@@ -223,18 +225,20 @@ for (feattype in names(featmap)) {
   htmlwidgets::saveWidget(p, glue('{feattype}plothtml/missing_feats.html'), selfcontained=F)
 
   # Total features plot
-  feats_per_run = aggregate(get(quantcol)~Run+sample, feats_filtered, length)
-  colnames(feats_per_run)[3] = 'nr_feats'
+  feats_per_run = aggregate(get(quantcol)~Run, feats_filtered, length)
+  colnames(feats_per_run)[2] = 'nr_feats'
+  feats_per_run_samples = merge(feats_per_run, inputfn[,c('Run', samplecol)], by='Run', all=TRUE)
   ggp = ggplot(feats_per_run) +
-    geom_bar(aes(x=sample, y=nr_feats, file=Run), stat='identity', position='dodge') + 
+    geom_bar(aes(x=Run, y=nr_feats), stat='identity', position='dodge') + 
     coord_flip() + 
     ylab('# identified') + 
+    scale_x_discrete(labels=feats_per_run_samples$sample) +
     theme_bw() + 
     theme(axis.title.x=element_text(size=15), axis.title.y=element_blank(),
           axis.text.x=element_text(size=10), axis.text.y=element_text(angle=90),
           legend.text=element_text(size=10), legend.title=element_blank())
   # plotly doesnt support hjust, so calculate position to be in middle
-  ggp = ggp + geom_text(aes(x=sample, y=nr_feats / 2, label=nr_feats), size=10, colour="white")
+  ggp = ggp + geom_text(aes(x=Run, y=nr_feats / 2, label=nr_feats), size=10, colour="white")
   p = ggplotly(ggp, width=600, height=vert_height) %>%
           layout(legend = list(orientation = 'h', x = 0, y = 1.1, xanchor='left', yanchor='bottom'))
   # Work around since plotly does not honor above legend.title=element_blank call
@@ -270,20 +274,23 @@ for (feattype in names(featmap)) {
   for (plot in names(plots)) {
     data_to_plot = plots[[plot]]$feats
     col_to_plot = plots[[plot]]$col
-    summary_stats <- data_to_plot[c('Run', 'sample', col_to_plot)] %>%
-      group_by(Run, sample) %>%
+    summary_stats <- data_to_plot[c('Run', col_to_plot)] %>%
+      group_by(Run) %>%
       boxplot_stats(.data[[col_to_plot]])
+    summary_stats$Run = as.character(summary_stats$Run)
+    sumstats_samples = merge(summary_stats, inputfn[,c('Run', samplecol)], by='Run', all=TRUE)
 
     # Plot using geom_crossbar, geom_errorbar
-    ggp = ggplot(summary_stats, aes(x=sample, y=middle, file=Run)) +
+    ggp = ggplot(summary_stats, aes(x=Run, y=middle)) +
       geom_errorbar(aes(ymin = whisk_min, ymax = whisk_max), width=0) +
       geom_crossbar(aes(ymin = lower, ymax=upper), fill='white', linewidth=0.15) +
       coord_flip() + ylab(ptypes[[ptype]][2]) + theme_bw() + 
       ylab(col_to_plot) +
+      scale_x_discrete(labels=sumstats_samples$sample) +
       theme(axis.title.x=element_text(size=15), axis.title.y=element_blank(),
 	    axis.text=element_text(size=10), axis.text.y=element_text(angle=90)) +
-      geom_text(aes(x=sample, y=(get('whisk_min') + get('whisk_max')) / 2,
-        label=.data[[filenamecol]]), position=position_nudge(x=0.1), size=3, colour="black")
+      geom_text(aes(x=Run, y=(get('whisk_min') + get('whisk_max')) / 2,
+        label=Run), position=position_nudge(x=0.1), size=3, colour="black")
     p = ggplotly(ggp, width=600, height=vert_height)
     htmlwidgets::saveWidget(p, glue('{feattype}plothtml/{plot}.html'), selfcontained=F)
   }
