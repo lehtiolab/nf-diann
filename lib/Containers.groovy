@@ -13,8 +13,8 @@ class Containers {
     ],
     scanheadsman: [
       version: '3.0',
-      docker: 'ghcr.io/lehtiolab/kantele_thermoreader:latest',
-      singularity: 'docker://ghcr.io/lehtiolab/kantele_thermoreader:latest',
+      docker: 'ghcr.io/lehtiolab/kantele_nf_thermoreader:1.4',
+      singularity: 'docker://ghcr.io/lehtiolab/kantele_nf_thermoreader:1.4',
     ],
     sqlite: [
       version: '3.33.0',

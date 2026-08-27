@@ -51,7 +51,7 @@ boxplot_stats = function(data, col) {
   return(summary_stats)
 }
 
-amount_ms2 = read.table("filescans", sep="\t", header=F)
+amount_ms2 = read.table("concat_filescans", sep="\t", header=F)
 colnames(amount_ms2) = c('file', 'nr_scans')
 nr_verts = length(unique(amount_ms2[[1]]))
 vert_height = 200 * nr_verts + 200

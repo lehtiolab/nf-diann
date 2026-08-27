@@ -13,7 +13,7 @@ process extractThermoScans {
   script:
   """
   exitcode=0
-  ${raws.collect { "timeout --preserve-status 5s wine /scanheadsman/ScanHeadsman.exe $it > tmpfn || exitcode=\$? \
+  ${raws.collect { "timeout --preserve-status 5s dotnet /scanheadsman/ScanHeadsman.dll \$(realpath $it) > tmpfn || exitcode=\$? \
     && if [[ \$exitcode != 0 && \$exitcode != 143 ]] ; then exit \$exitcode ;fi \
     && echo ${it.baseName}\$'\t'\$(grep 'Processing scan [0-9]' tmpfn | sed 's/.* of //') >> nrscans"}.join('\n')}
   """
@@ -63,7 +63,7 @@ process precursorPlot {
   container Containers.containers[task.tag][workflow.containerEngine]
 
   input:
-  tuple path('filescans'), path(precursors), path(inputfn), val(conflvl)
+  tuple path('filescans????'), path(precursors), path(inputfn), val(conflvl)
   
   output:
   tuple path('precursorplothtml'), path('*_qc.txt'), path('*__overlap'), path('genesplothtml'), path('proteinsplothtml')
@@ -71,6 +71,7 @@ process precursorPlot {
   script:
   // FIXME error if not finding these columns!
   """
+  cat filescans* > concat_filescans
   mkdir -p precursorplothtml genesplothtml proteinsplothtml
   precursor_qc.R --precursors $precursors --inputfn $inputfn --conflvl $conflvl
   """
@@ -112,17 +113,17 @@ workflow QC_REPORT {
   raws_ftypes
   | filter { it[1] == 'thermo' }
   | map { it[0] }
-  | toList
-  | filter { it.size() > 1 }
+  | collate(10) // split raw reading in batches of 10
+  | filter { it.size() > 0 }
   | extractThermoScans
   
   raws_ftypes
   | filter { it[1] == 'bruker' }
   | map { it[0] }
-  | toList
-  | filter { it.size() > 1 }
+  | collate(10) // split raw reading in batches of 10
+  | filter { it.size() > 0 }
   | getBrukerScanNumbers
-  | concat(extractThermoScans.out)
+  | mix(extractThermoScans.out)
   | combine(precursors)
   | combine(inputfn)
   | map { it + [proteinfdr] }
