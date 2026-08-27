@@ -204,25 +204,28 @@ for (feattype in names(featmap)) {
 
   # Missing features plot
   feats_missing = feats[feats[[quantcol]] <= 0,]
-  missing_per_run = aggregate(get(quantcol)~Run, feats_missing, length)
-  colnames(missing_per_run)[2] = 'nr_missing'
-  missing_samples = merge(missing_per_run, inputfn[,c('Run', samplecol)], by='Run', all=TRUE)
-  ggp = ggplot(missing_per_run) +
-    geom_bar(aes(x=Run, y=nr_missing), stat='identity', position='dodge') + 
-    coord_flip() + 
-    ylab('# missing features') + 
-    scale_x_discrete(labels=missing_samples$sample) +
-    theme_bw() + 
-    theme(axis.title.x=element_text(size=15), axis.title.y=element_blank(),
-          axis.text.x=element_text(size=10), axis.text.y=element_text(angle=90),
-          legend.text=element_text(size=10), legend.title=element_blank()) +
-    # plotly doesnt support hjust, so calculate position to be in middle
-    geom_text(aes(x=Run, y=nr_missing / 2, label=Run), size=3, colour="white")
-  p = ggplotly(ggp, width=600, height=vert_height) %>%
-          layout(legend = list(orientation = 'h', x = 0, y = 1.1, xanchor='left', yanchor='bottom'))
-  # Work around since plotly does not honor above legend.title=element_blank call
-  p$x$layout$legend$title$text = ''
-  htmlwidgets::saveWidget(p, glue('{feattype}plothtml/missing_feats.html'), selfcontained=F)
+  if (nrow(feats_missing)) {
+    missing_per_run = aggregate(get(quantcol)~Run, feats_missing, length)
+    colnames(missing_per_run)[2] = 'nr_missing'
+    missing_samples = merge(missing_per_run, inputfn[,c('Run', samplecol)], by='Run', all=TRUE)
+    ggp = ggplot(missing_per_run) +
+      geom_bar(aes(x=Run, y=nr_missing), stat='identity', position='dodge') + 
+      coord_flip() + 
+      ylab('# missing features') + 
+      scale_x_discrete(labels=missing_samples$sample) +
+      theme_bw() + 
+      theme(axis.title.x=element_text(size=15), axis.title.y=element_blank(),
+            axis.text.x=element_text(size=10), axis.text.y=element_text(angle=90),
+            legend.text=element_text(size=10), legend.title=element_blank()) +
+      # plotly doesnt support hjust, so calculate position to be in middle
+      geom_text(aes(x=Run, y=nr_missing / 2, label=Run), size=3, colour="white")
+    p = ggplotly(ggp, width=600, height=vert_height) %>%
+            layout(legend = list(orientation = 'h', x = 0, y = 1.1, xanchor='left', yanchor='bottom'))
+    # Work around since plotly does not honor above legend.title=element_blank call
+    p$x$layout$legend$title$text = ''
+    htmlwidgets::saveWidget(p, glue('{feattype}plothtml/missing_feats.html'), selfcontained=F)
+  }
+ 
 
   # Total features plot
   feats_per_run = aggregate(get(quantcol)~Run, feats_filtered, length)
