@@ -124,6 +124,8 @@ workflow QC_REPORT {
   | filter { it.size() > 0 }
   | getBrukerScanNumbers
   | mix(extractThermoScans.out)
+  | toList
+  | toList
   | combine(precursors)
   | combine(inputfn)
   | map { it + [proteinfdr] }
