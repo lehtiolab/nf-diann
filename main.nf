@@ -6,6 +6,25 @@ include { identify_info_map; listify; read_header } from './modules.nf'
 include { QC_REPORT } from './workflows/create_report.nf'
 
 
+process parseEnsemblFasta {
+  tag 'diann'
+  container Containers.containers[task.tag][workflow.containerEngine]
+
+  input:
+  path(inputdb)
+  
+  output:
+  path(outputdb)
+
+  script:
+  outputdb = "${inputdb.baseName}_parsed.fasta"
+  """
+  sed 's/ pep .*gene:\\(ENS.*\\) / \\1/' $inputdb > $outputdb
+  """
+
+}
+
+
 process predictFastaLibrary {
 cache 'lenient'
 
@@ -403,7 +422,9 @@ workflow {
     
     diann_in = raw_c.thermo.mix(raw_c.bruker)
   
-    db_params = channel.fromPath(params.tdb)
+    tdb = channel.fromPath(params.tdb)
+
+    db_params = parseEnsemblFasta(tdb)
       .toList()
       .map { [it, diann_params] }
 
