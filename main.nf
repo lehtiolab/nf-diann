@@ -297,7 +297,7 @@ process DiaQuantificationReport {
   container Containers.containers[task.tag][workflow.containerEngine]
 
   input:
-  tuple path(raws, arity: '1..*'), path('quants/*'), path(lib), path(fasta), val(diannparams), val(quantparams), val(enzyme)
+  tuple path(raws, arity: '1..*'), path('quants/*'), path(lib), path(fasta), val(diannparams), val(quantparams), val(enzyme), path(inputfn)
   
   output:
   tuple path('report.parquet'), path('*.tsv'), emit: report
@@ -341,7 +341,7 @@ process DiaQuantificationReport {
     ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''} \
       | tee stdout.bak
     grep ERROR stdout.bak && exit 1
-    parquet_to_tsv.py report.parquet $enzyme
+    parquet_to_tsv.py report.parquet $enzyme $inputfn
 
     mv report.log.txt quantify_report.log
   """
@@ -550,6 +550,8 @@ workflow {
     }
   
     if (outputreport) {
+      input_to_qc = channel.fromPath(params.input) 
+
       // Run training quantUMS and then full experiment
       trainq_in = rawquantfiles
       .filter { it[2] } // filter raws with supplied quants
@@ -576,6 +578,7 @@ workflow {
       .combine(db_params)
       .combine(TrainQuantUMS.out.params)
       .map { it + [params.enzyme] }
+      .combine(input_to_qc)
       DiaQuantificationReport(qreport_in)
 
       raws_ftypes = raw_c.bruker
@@ -583,7 +586,6 @@ workflow {
       .concat(raw_c.thermo
         .map { [it[1], 'thermo'] }
       )
-      input_to_qc = channel.fromPath(params.input) 
       QC_REPORT(raws_ftypes, input_to_qc, DiaQuantificationReport.out.precursors, params.proteinconflvl)
 
 
