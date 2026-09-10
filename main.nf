@@ -301,7 +301,7 @@ process DiaQuantificationReport {
   
   output:
   tuple path('report.parquet'), path('*.tsv'), emit: report
-  path('precursors.txt'), emit: precursors
+  path('precursors_*.txt'), emit: precursors_split
   path('quantify_report.log'), emit: log
 
   script:
@@ -586,7 +586,7 @@ workflow {
       .concat(raw_c.thermo
         .map { [it[1], 'thermo'] }
       )
-      QC_REPORT(raws_ftypes, input_to_qc, DiaQuantificationReport.out.precursors, params.proteinconflvl)
+      QC_REPORT(raws_ftypes, input_to_qc, DiaQuantificationReport.out.precursors_split, params.proteinconflvl)
 
 
       reports_out = DiaQuantificationReport.out.report

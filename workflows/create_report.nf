@@ -37,27 +37,6 @@ process getBrukerScanNumbers {
 }
 
 
-process parquetToTsv {
-  // Precursor table output, from parquet to tsv, could possibly run directly
-  // inside DIA-NN process
-
-  tag 'diann'
-  container Containers.containers[task.tag][workflow.containerEngine]
-
-  input:
-  tuple path(report), val(enzyme)
-
-  output:
-  path('precursors.txt')
-
-  script:
-  """
-  parquet_to_tsv.py $report $enzyme
-  """
-
-}
-
-
 process precursorPlot {
   tag 'ddamsproteomics'
   container Containers.containers[task.tag][workflow.containerEngine]
@@ -88,8 +67,6 @@ cache false
   input:
   tuple path('precplothtml'), path(summaries), path(feat_overlaps), path('genesplots'), path('proteinsplots')
   
-  //tuple path(platescans), path(plotlibs), path('psmplots'), path(psm_summary), path('psmids'), path('miscleav'), path(featplots), path(feat_summaries), path(feat_overlaps), path('ptmplots'), path(ptmfiles), path('warnings*')
-  
   output:
   tuple path('report_groovy_template.html'), path('libs.js')
   
@@ -106,7 +83,7 @@ workflow QC_REPORT {
   take:
   raws_ftypes
   inputfn
-  precursors
+  precursors_split
   proteinfdr
   
   main:
@@ -126,7 +103,7 @@ workflow QC_REPORT {
   | mix(extractThermoScans.out)
   | toList
   | toList
-  | combine(precursors)
+  | combine(precursors_split | toList)
   | combine(inputfn)
   | map { it + [proteinfdr] }
   | precursorPlot

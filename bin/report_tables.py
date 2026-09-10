@@ -44,29 +44,34 @@ precplotfns = {'amount_precursors.html': '# of precursors',
         'missed_cleavages.html': '# of missed cleavages',
         }
 precboxplots = {
-        'retentiontime.html': 'Retention time',
-        'precquant.html': 'Quantified precursors',
-        'peakwidth.html': 'Peak width',
-        'precerror.html': 'Precursor error',
+        'retentiontime': 'Retention time',
+        'precquant': 'Quantified precursors',
+        'peakwidth': 'Peak width',
+        'precerror': 'Precursor error',
         }
 
 precplots = {}
 plots = defaultdict(dict)
 
 pdir = 'precplothtml'
+nrchunks = len(glob(os.path.join(pdir, 'file__*__amount_precursors.html')))
 for plotname in precplotfns:
-    plot = {}
+    plot = defaultdict(list)
     for samfile in ['sample', 'file']:
-        pfile = os.path.join(pdir, f'{samfile}__{plotname}')
-        if os.path.exists(pfile):
-            plot[samfile] = {'title': precplotfns[plotname], 'plot': get_plotly_html(pfile)}
+        for chunk in range(nrchunks):
+            pfile = os.path.join(pdir, f'{samfile}__{chunk}__{plotname}')
+            if os.path.exists(pfile):
+                plot[samfile].append({'title': precplotfns[plotname], 'plot': get_plotly_html(pfile)})
     precplots[plotname] = plot
+
 for plotname in precboxplots:
-    plot = {}
-    pfile = os.path.join(pdir, plotname)
-    if os.path.exists(pfile):
-        plot = {'title': precboxplots[plotname], 'plot': get_plotly_html(pfile)}
-    precplots[plotname] = plot
+    precplots[plotname] = []
+    for chunk in range(nrchunks):
+        plot = {}
+        pfile = os.path.join(pdir, f'{plotname}__{chunk}.html')
+        if os.path.exists(pfile):
+            plot = {'title': precboxplots[plotname], 'plot': get_plotly_html(pfile)}
+        precplots[plotname].append(plot)
 
 # Protein/gene plots
 featnames = [
@@ -81,24 +86,24 @@ featplotnames = [('nrfeats', 'Identifications'),
           ]
 
 featplotfns = {
-        'missing_feats': ('missing_feats.html', False),
-        'ms1_quant': ('quant.html', False),
-        'ms1nrprec': ('nrp.html', False),
+        'missing_feats': ('missing_feats', False),
+        'ms1_quant': ('quant', False),
+        'ms1nrprec': ('nrp', False),
         # FIXME ALSO INCLUDE PEPTIDES
-        'nrfeats': ('nrfeats.html', 'nrfeats__text.html'),
+        'nrfeats': ('nrfeats', 'nrfeats__text.html'),
         }
-featplots = defaultdict(defaultdict)
+featplots = defaultdict(dict)
 for plotname, (pfn, textfn) in featplotfns.items():
     for featname, feattitle in featnames:
+        featplots[plotname][featname] = []
         pdir = f'{featname}plots'
-        pfile = os.path.join(pdir, pfn)
-        if os.path.exists(pfile):
-            featplots[plotname][featname] = get_plotly_html(pfile)
-            if textfn:
-                with open(os.path.join(pdir, textfn)) as fp:
-                    featplots[plotname][f'{featname}__text'] = fp.read().strip().split('\n')
-        else:
-            featplots[plotname][featname] = False
+        for chunk in range(nrchunks):
+            pfile = os.path.join(pdir, f'{pfn}__{chunk}.html')
+            if os.path.exists(pfile):
+                featplots[plotname][featname].append(get_plotly_html(pfile))
+                if textfn:
+                    with open(os.path.join(pdir, textfn)) as fp:
+                        featplots[plotname][f'{featname}__text'] = fp.read().strip().split('\n')
     if all(x is False for x in featplots[plotname].values()):
         featplots[plotname] = False
 
@@ -111,10 +116,8 @@ for dirp, dirnames, fns in os.walk('.', followlinks=True):
             dst = os.path.join(dirp, fn.replace('.min.js', '.js'))
             shutil.copy(src, dst)
 libs = []
-for dirp, dirnames, fns in os.walk('precplothtml/sample__amount_precursors_files', followlinks=True):
-    print(dirp)
+for dirp, dirnames, fns in os.walk('precplothtml/sample__0__amount_precursors_files', followlinks=True):
     for fn in fns:
-        print(fns)
         srcfn = os.path.join(dirp, fn)
         if not os.path.exists(srcfn) or fn.endswith('.min.js') or fn.endswith('.scss'):
             continue
@@ -151,7 +154,7 @@ summary_field_order = ['Label', 'precursorcount', 'nr_of_genes', 'nr_scans', 'pe
         ]
 
 summary_table = defaultdict(dict)
-for fn in glob('*__counttable_qc.txt'):
+for fn in glob('counttable_qc.txt'):
     with open(fn) as fp:
         header = next(fp).strip('\n').split('\t')
         for line in fp:
@@ -166,11 +169,12 @@ for _s, fields in summary_table.items():
 
 # Missed cleavages table
 miscleav = []
-with open('file__miscleav_qc.txt') as fp:
-    head = next(fp).strip().split('\t')
-    for line in fp:
-        lnmap = {head[ix]: x for ix, x in enumerate(line.strip().split('\t'))}
-        miscleav.append([lnmap['file'], lnmap['missed_cleavage'], lnmap['nrprec'], lnmap['percent']])
+for chunk in range(nrchunks):
+    with open(f'miscleav_qc.txt') as fp:
+        head = next(fp).strip().split('\t')
+        for line in fp:
+            lnmap = {head[ix]: x for ix, x in enumerate(line.strip().split('\t'))}
+            miscleav.append([lnmap['file'], lnmap['missed_cleavage'], lnmap['nrprec'], lnmap['percent']])
 
 # Overlap table
 overlap = defaultdict(dict)

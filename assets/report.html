@@ -156,8 +156,10 @@
         {% for sf in ['sample', 'file'] %}
         {% if sf in precplots[plotname] and precplots[plotname][sf] %}
         <div class="column">
-          <h4 class="title is-4">{{ precplots[plotname][sf].title }} per {{ sf }}</h4>
-          {{ precplots[plotname][sf].plot }}
+          <h4 class="title is-4">{{ precplots[plotname][sf][0].title }} per {{ sf }}</h4>
+          {% for pplot in precplots[plotname][sf]  %}
+          {{ pplot.plot }}
+          {% endfor %}
         </div>
         {% endif %}
         {% endfor %}
@@ -166,22 +168,30 @@
 
       <div class="columns">
         <div class="column">
-          <h4 class="title is-4">{{ precplots['precerror.html'].title }}</h4>
-          {{ precplots['precerror.html'].plot }}
+          <h4 class="title is-4">{{ precplots['precerror'][0].title }}</h4>
+          {% for pplot in precplots['precerror']  %}
+          {{ pplot.plot }}
+          {% endfor %}
         </div>
         <div class="column">
-          <h4 class="title is-4">{{ precplots['retentiontime.html'].title }}</h4>
-          {{ precplots['retentiontime.html'].plot }}
+          <h4 class="title is-4">{{ precplots['retentiontime'][0].title }}</h4>
+          {% for pplot in precplots['retentiontime']  %}
+          {{ pplot.plot }}
+          {% endfor %}
         </div>
       </div>
       <div class="columns">
         <div class="column">
-          <h4 class="title is-4">{{ precplots['precquant.html'].title }}</h4>
-          {{ precplots['precquant.html'].plot }}
+          <h4 class="title is-4">{{ precplots['precquant'][0].title }}</h4>
+          {% for pplot in precplots['precquant']  %}
+          {{ pplot.plot }}
+          {% endfor %}
         </div>
         <div class="column">
-          <h4 class="title is-4">{{ precplots['peakwidth.html'].title }}</h4>
-          {{ precplots['peakwidth.html'].plot }}
+          <h4 class="title is-4">{{ precplots['peakwidth'][0].title }}</h4>
+          {% for pplot in precplots['peakwidth']  %}
+          {{ pplot.plot }}
+          {% endfor %}
         </div>
       </div>
     </div>
@@ -199,7 +209,9 @@
             {% for line in featplots[plotname][fname + '__text'] %}
             <p>{{ line }}</p>
             {% endfor %}
-            {{ featplots[plotname][fname] }}
+            {% for plot in featplots[plotname][fname] %}
+            {{ plot }}
+            {% endfor %}
           </div>
           {% endif %}
           {% endfor %}
