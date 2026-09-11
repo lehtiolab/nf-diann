@@ -1,5 +1,5 @@
 FROM mambaorg/micromamba:2-ubuntu24.04
-LABEL description="DIA-NN, additional stuff and dinosaur which does not work in biocontainer due to lack of fontconfig"
+LABEL description="nf-diann container 0.3, DIA-NN 2.6.1 and pyArrow 23.0"
 
 ARG NEW_MAMBA_USER=mambauser
 ARG NEW_MAMBA_USER_ID=1

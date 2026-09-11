@@ -62,4 +62,41 @@ flowchart TD
     style V stroke-dasharray: 8
 ```
 
+## Parameters
+```
+  --ms1acc                    MS1 accuracy in PPM
+  --ms2acc                    MS2 accuracy in PPM
+  --window                    Scan window size
+  --varmods                   Variable modifications, default is 'UniMod:35,15.994915,M', add more with separator ;
+  --fixmods                   Fixed modifications, default is 'UniMod:4,57.021464,C', add more with separator ;
+  --ntermmetexcision          Include excision of N-terminal methionine as mod
+  --ntermacetyl               Include actelylation of N-terminal as mod
+  --maxvarmods                Max nr of variable modifications
+  --miscleav                  Allowed nr of missed cleavages, default 1
+  --precconflvl               Precursor q-value threshold, default 0.01  (--matrix-qvalue)
+  --proteinconflvl            Protein q-value threshold, default 0.01 (--matrix-spec-q)
+  --mincharge                 Min precursor charge, def 2
+  --maxcharge                 Max precursor charge, def 4
+  --minmz                     Min precursor m/z, def 300 
+  --maxmz                     Max precursor m/z, def 1300
+  --minfragmz                 Min fragment m/z, def 200
+  --maxfragmz                 Max fragment m/z, def 1800
+  --minpeplen                 Min peptide length, def 8
+  --maxpeplen                 Max peptide length, def 40
+  --nonorm                    No normalization
+  --proteotypicity            default 2=genes, 0=isoforms2, 1=protein names
+  --ids_to_names              DIANN --ids-to-names for when using isoforms
+  --enzyme                    Default 'trypsin', use otherwise trypsinp (cuts after P)
+  --exclude_contaminants      Exclude possible contaminants, specify a tag, e.g. 'cRAP-'
+  --individual_massacc        Not recommended with reusing quantfiles
+  --individual_windows        Not recommended with reusing quantfiles
 
+  --batchsize                 Amount of files in a parallel batch, 0: all files in same batch
+  --quantdir                  Dir where .quant files to reuse are in
+
+  # What files to output, if none specified all are output
+  --output_pred_lib           Output the predicted library
+  --output_emp_lib            Output the empirical library
+  --outputquant               Output the .quant files
+  --outputreport              Output a report html file
+```

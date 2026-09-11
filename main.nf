@@ -487,7 +487,7 @@ workflow {
     }
 
     // If no output params are given, output only the last step, i.e. report
-    outputreport = params.outputreport || (!params.output_pred_lib && !params.output_emp_lib && !params.outputquant && !params.outputreport)
+    outputreport = params.outputreport || (!params.output_pred_lib && !params.output_emp_lib && !params.outputquant)
     if (outputreport || params.outputquant) {
   
       // Pre-made quantfiles go into a channel
