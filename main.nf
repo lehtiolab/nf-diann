@@ -216,7 +216,6 @@ process RunDiaAnalysis {
     ${diannparams.fixmods.collect { "--fixed-mod $it" }.join(' ')} \
     ${diannparams.ntermmetex ? '--met-excision' : ''} \
     ${diannparams.ntermac ? '--var-mod UniMod:1,42.010565,*n' : ''} \
-    ${diannparams.nonorm ? '--no-norm' : ''} \
     ${diannparams.idstonames ? '--ids-to-names' : ''} \
     --pg-level ${diannparams.pglvl} \
     --min-pr-charge ${diannparams.mincharge} \
@@ -273,7 +272,6 @@ process TrainQuantUMS {
     ${diannparams.fixmods.collect { "--fixed-mod $it" }.join(' ')} \
     ${diannparams.ntermmetex ? '--met-excision' : ''} \
     ${diannparams.ntermac ? '--var-mod UniMod:1,42.010565,*n' : ''} \
-    ${diannparams.nonorm ? '--no-norm' : ''} \
     ${diannparams.idstonames ? '--ids-to-names' : ''} \
     --pg-level ${diannparams.pglvl} \
     --min-pr-charge ${diannparams.mincharge} \
