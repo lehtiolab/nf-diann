@@ -49,6 +49,7 @@ cache 'lenient'
     --fasta-search \
     --out-lib library.speclib \
     --missed-cleavages $diannparams.miscleav \
+    --pg-level ${diannparams.pglvl} \
     ${diannparams.varmods.collect { "--var-mod $it" }.join(' ')} \
     ${diannparams.fixmods.collect { "--fixed-mod $it" }.join(' ')} \
     --var-mods $diannparams.maxvarmods \
@@ -101,6 +102,7 @@ cache 'lenient'
     --temp quants/ \
     --rt-profiling \
     --missed-cleavages $diannparams.miscleav \
+    --pg-level ${diannparams.pglvl} \
     ${diannparams.ms1acc ? "--mass-acc-ms1 ${diannparams.ms1acc}" : ''} \
     ${diannparams.ms2acc ? "--mass-acc ${diannparams.ms2acc}" : ''} \
     ${diannparams.window ? "--window $diannparams.window" : ''} \
@@ -155,6 +157,7 @@ process combineEmpiricalLibraryRuns {
     --out-lib library \
     --rt-profiling \
     --missed-cleavages $diannparams.miscleav \
+    --pg-level ${diannparams.pglvl} \
     ${diannparams.ms1acc ? "--mass-acc-ms1 ${diannparams.ms1acc}" : ''} \
     ${diannparams.ms2acc ? "--mass-acc ${diannparams.ms2acc}" : ''} \
     ${diannparams.window ? "--window $diannparams.window" : ''} \
