@@ -68,7 +68,7 @@ cache false
   tuple path('precplothtml'), path(summaries), path(feat_overlaps), path('genesplots'), path('proteinsplots')
   
   output:
-  tuple path('report_groovy_template.html'), path('libs.js')
+  tuple path('report_groovy_template.html'), path('report_groovy_template_light.html'), path('libs.js')
   
   script:
   """

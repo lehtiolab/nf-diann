@@ -23,8 +23,10 @@
       <div class="mt-5 tabs is-boxed"> 
         <ul>
           <li id="resultstab" class="is-active"><a>Results</a></li>
+          {% if reporttype == 'full' %}
           <li id="precqctab"> <a>Precursors</a> </li>
           <li id="featqctab"> <a>Proteins/genes </a> </li>
+          {% endif %}
           <li id="rundatatab"><a>Run data</a></li>
         </ul>
       </div>
@@ -150,6 +152,7 @@
       </table>
     </div>
 
+    {% if reporttype == 'full' %}
     <div id="psmqcpage" class="mt-5 container">
       {% for plotname in precplots %}
       <div class="columns">
@@ -220,6 +223,7 @@
       {% endif %}
       {% endfor %}
     </div>
+    {% endif %}
 
     <script type="text/javascript">
       let tabs = [

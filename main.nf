@@ -674,6 +674,7 @@ workflow {
         params: psmap['Other parameters'],
         infiles: infiles,
         libs: libs, bulma: bulma]
+    // Full report
     def rf = new File("${workflow.outputDir}/report_groovy_template.html")
     def temp_engine = new groovy.text.StreamingTemplateEngine()
     def report_template = temp_engine.createTemplate(rf).make(fields)
@@ -681,6 +682,14 @@ workflow {
     def output_rf = new File( "${workflow.outputDir}/report.html" )
     output_rf.withWriter { w -> w << report_html }
     rf.delete()
+    // Light report
+    def rflight = new File("${workflow.outputDir}/report_groovy_template_light.html")
+    //def temp_engine = new groovy.text.StreamingTemplateEngine()
+    def report_template_light = temp_engine.createTemplate(rflight).make(fields)
+    def report_html_light = report_template_light.toString()
+    def output_rf_light = new File( "${workflow.outputDir}/report_small.html" )
+    output_rf_light.withWriter { w -> w << report_html_light }
+    rflight.delete()
     libfile.delete()
   }
 }

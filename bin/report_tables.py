@@ -202,6 +202,24 @@ for feattype, _ft in featnames:
 # Write to template
 with open('report_groovy_template.html', 'w') as fp:
     fp.write(template.render(reportdate=date,
+        reporttype='full',
+        version=args.version,
+        doi=args.doi,
+        precplots=precplots,
+        featplots=featplots,
+        featnames=featnames,
+        featplotnames=featplotnames,
+        tabletitles=tabletitles,
+        miscleav=miscleav,
+        psmtables=False,
+        summary_fields=summary_fields,
+        summary_table=summary_table,
+        overlap=overlap,
+        #warnings=warnings,
+        ))
+with open('report_groovy_template_light.html', 'w') as fp:
+    fp.write(template.render(reportdate=date,
+        reporttype='light',
         version=args.version,
         doi=args.doi,
         precplots=precplots,
