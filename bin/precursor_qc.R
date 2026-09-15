@@ -6,11 +6,13 @@ library(argparse)
 
 parser <- ArgumentParser()
 parser$add_argument('--precursors', type='character', nargs='+')
+parser$add_argument('--non-norm-precursors', type='character', nargs='+', default=c())
 parser$add_argument('--inputfn', type='character')
 parser$add_argument('--conflvl', type='double')
 opt = parser$parse_args()
 
 precursortables = opt$precursors
+nn_precursors = opt$non_norm_precursors
 inputfnpath = opt$inputfn
 enzyme = opt$enzyme
 
@@ -296,11 +298,45 @@ for (feattype in names(featmap)) {
       htmlwidgets::saveWidget(p, glue('{feattype}plothtml/{plot}__{chunk}.html'), selfcontained=F)
     }
 
+  for (nn_precursortable in nn_precursors) {
+    precs_labeled = read.table(nn_precursortable, header=T, sep="\t", comment.char = "", quote = "")
+    featcol = featmap[[feattype]][1]
+    featfiltcol = featmap[[feattype]][2]
+    quantcol = featmap[[feattype]][3]
+    prec_featcols = precs_labeled[, c('Run', samplecol, featmap[[feattype]]) ]
+    precfeats_filt = prec_featcols[prec_featcols[featfiltcol] < opt$conflvl, ]
+    # Keep only one precursor line per feature per run
+    feats = precfeats_filt %>%
+      distinct(Run, .data[[featcol]], .keep_all=T)
+  
+    # Remove NA/0 for both precursor and feats table:
+    precfeats_filt = precfeats_filt[precfeats_filt[[quantcol]] >= 0,]
+    feats_filtered = feats[feats[[quantcol]] >= 0,]
+
+    summary_stats <- feats_filtered[c('Run', quantcol)] %>%
+      group_by(Run) %>%
+      boxplot_stats(.data[[quantcol]])
+    summary_stats$Run = as.character(summary_stats$Run)
+    sumstats_samples = merge(summary_stats, inputfn[,c('Run', samplecol)], by='Run')
+
+    # Plot using geom_crossbar, geom_errorbar
+    ggp = ggplot(summary_stats, aes(x=Run, y=middle)) +
+      geom_errorbar(aes(ymin = whisk_min, ymax = whisk_max), width=0) +
+      geom_crossbar(aes(ymin = lower, ymax=upper), fill='white', linewidth=0.15) +
+      coord_flip() + ylab(ptypes[[ptype]][2]) + theme_bw() + 
+      ylab(quantcol) +
+      scale_x_discrete(labels=sumstats_samples$sample) +
+      theme(axis.title.x=element_text(size=15), axis.title.y=element_blank(),
+	    axis.text=element_text(size=10), axis.text.y=element_text(angle=90)) +
+      geom_text(aes(x=Run, y=(get('whisk_min') + get('whisk_max')) / 2,
+        label=Run), position=position_nudge(x=0.1), size=3, colour="black")
+    p = ggplotly(ggp, width=600, height=vert_height)
+    htmlwidgets::saveWidget(p, glue('{feattype}plothtml/nnquant__{chunk}.html'), selfcontained=F)
+  }
   chunk = chunk + 1
   }
 
   # Text about overlap above protein/gene plots
-  print(head(accumulated_feats))
   if (ncol(accumulated_feats) > 2) {
     accumulated_feats$rowsums = rowSums(accumulated_feats[,-1], na.rm=T)
     accumulated_feats_q$rowsums = rowSums(accumulated_feats_q[,-1], na.rm=T)

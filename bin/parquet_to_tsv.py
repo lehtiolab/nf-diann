@@ -19,6 +19,7 @@ elif sys.argv[2] == 'trypsinp':
     miscl_re = '[KR][A-Z]'
 
 inputfn = sys.argv[3]
+normalizing = sys.argv[4]
 
 precursors = precursors.append_column('missed_cleavages', pc.count_substring_regex(precursors['Stripped.Sequence'], miscl_re))
 
@@ -86,7 +87,7 @@ while end < rowcount:
         # still more files with that sample even you have taken a slice of 100 files.
         # In that case we select the next sample break
         pass
-    pcsv.write_csv(sorted_p.slice(start, end-start), f'precursors_{chunk}.txt', write_opt)
+    pcsv.write_csv(sorted_p.slice(start, end-start), f'precursors_{normalizing}_{chunk}.txt', write_opt)
     chunk += 1
 
 # Also write full table for user output

@@ -42,17 +42,18 @@ process precursorPlot {
   container Containers.containers[task.tag][workflow.containerEngine]
 
   input:
-  tuple path('filescans????'), path(precursors), path(inputfn), val(conflvl)
+  tuple path('filescans????'), path(precursors), path(nonnorm_prec), path(inputfn), val(conflvl)
   
   output:
   tuple path('precursorplothtml'), path('*_qc.txt'), path('*__overlap'), path('genesplothtml'), path('proteinsplothtml')
   
   script:
+  nonnorm_parsed = nonnorm_prec[0].name == 'NO__FILE' ? '' : "--non-norm-precursors $nonnorm_prec"
   // FIXME error if not finding these columns!
   """
   cat filescans* > concat_filescans
   mkdir -p precursorplothtml genesplothtml proteinsplothtml
-  precursor_qc.R --precursors $precursors --inputfn $inputfn --conflvl $conflvl
+  precursor_qc.R --precursors $precursors ${nonnorm_parsed} --inputfn $inputfn --conflvl $conflvl
   """
 }
 
@@ -84,6 +85,7 @@ workflow QC_REPORT {
   raws_ftypes
   inputfn
   precursors_split
+  non_norm_precursors_split
   proteinfdr
   
   main:
@@ -103,7 +105,8 @@ workflow QC_REPORT {
   | mix(extractThermoScans.out)
   | toList
   | toList
-  | combine(precursors_split | toList)
+  | combine(precursors_split | toSortedList)  // FIXME need to order and line up w non norm
+  | combine(non_norm_precursors_split | toSortedList)
   | combine(inputfn)
   | map { it + [proteinfdr] }
   | precursorPlot

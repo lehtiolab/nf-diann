@@ -81,6 +81,7 @@ featnames = [
 featplotnames = [('nrfeats', 'Identifications'),
           ('missing_feats', 'Missing features'),
           ('ms1_quant', 'Quantities'),
+          ('nn_quant', 'Quantities (no cross-run normalization)'),
           ('ms1nrprec', '# precursors with quant per protein'),
           ('ms1nrpep', '# peptides with MS2 quant per protein'),
           ]
@@ -88,6 +89,7 @@ featplotnames = [('nrfeats', 'Identifications'),
 featplotfns = {
         'missing_feats': ('missing_feats', False),
         'ms1_quant': ('quant', False),
+        'nn_quant': ('nnquant', False),
         'ms1nrprec': ('nrp', False),
         # FIXME ALSO INCLUDE PEPTIDES
         'nrfeats': ('nrfeats', 'nrfeats__text.html'),

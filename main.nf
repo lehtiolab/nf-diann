@@ -3,6 +3,9 @@
 include { paramsSummaryMap } from 'plugin/nf-schema'
 
 include { identify_info_map; listify; read_header } from './modules.nf' 
+include { DiaQuantificationReport ;
+          DiaQuantificationReport as NonNormalizedDiannReport; 
+} from './modules.nf' 
 include { QC_REPORT } from './workflows/create_report.nf'
 
 
@@ -292,62 +295,6 @@ process TrainQuantUMS {
   """
 }
 
-process DiaQuantificationReport {
-
-  tag 'diann'
-  container Containers.containers[task.tag][workflow.containerEngine]
-
-  input:
-  tuple path(raws, arity: '1..*'), path('quants/*'), path(lib), path(fasta), val(diannparams), val(quantparams), val(enzyme), path(inputfn)
-  
-  output:
-  tuple path('report.parquet'), path('*.tsv'), emit: report
-  path('precursors_*.txt'), emit: precursors_split
-  path('quantify_report.log'), emit: log
-
-  script:
-  """
-  diann-linux --threads ${task.cpus} \
-    ${raws.collect { "--f \$(realpath $it)"}.join(' ') } \
-    --lib $lib \
-    ${fasta.collect { "--fasta $it" }.join(' ')} \
-    --cut ${diannparams.cut} \
-    --use-quant \
-    --quant-ori-names \
-    --temp quants \
-    ${quantparams.trim()} \
-    ${diannparams.ms1acc ? "--mass-acc-ms1 ${diannparams.ms1acc}" : ''} \
-    ${diannparams.ms2acc ? "--mass-acc ${diannparams.ms2acc}" : ''} \
-    ${diannparams.window ? "--window $diannparams.window" : ''} \
-    ${diannparams.varmods.collect { "--var-mod $it" }.join(' ')} \
-    ${diannparams.fixmods.collect { "--fixed-mod $it" }.join(' ')} \
-    --matrices \
-    ${diannparams.ntermmetex ? '--met-excision' : ''} \
-    ${diannparams.ntermac ? '--var-mod UniMod:1,42.010565,*n' : ''} \
-    ${diannparams.nonorm ? '--no-norm' : ''} \
-    ${diannparams.idstonames ? '--ids-to-names' : ''} \
-    --pg-level ${diannparams.pglvl} \
-    --min-pr-charge ${diannparams.mincharge} \
-    --max-pr-charge ${diannparams.maxcharge} \
-    --min-pep-len ${diannparams.minpeplen} \
-    --max-pep-len ${diannparams.maxpeplen} \
-    --min-pr-mz ${diannparams.minmz} \
-    --max-pr-mz ${diannparams.maxmz} \
-    --min-fr-mz ${diannparams.minfrmz} \
-    --max-fr-mz ${diannparams.maxfrmz} \
-    ${diannparams.indiwin ? "--individual-windows" : ''} \
-    ${diannparams.indiacc ? "--individual-mass-acc" : ''} \
-    --qvalue ${diannparams.precfdr} \
-    --matrix-qvalue ${diannparams.protfdr} \
-    ${diannparams.excl_contam ? "--cont-quant-exclude ${diannparams.excl_contam}" : ''} \
-      | tee stdout.bak
-    grep ERROR stdout.bak && exit 1
-    parquet_to_tsv.py report.parquet $enzyme $inputfn
-
-    mv report.log.txt quantify_report.log
-  """
-}
-
 
 process logConcat {
   tag 'local'
@@ -580,14 +527,33 @@ workflow {
       .combine(TrainQuantUMS.out.params)
       .map { it + [params.enzyme] }
       .combine(input_to_qc)
-      DiaQuantificationReport(qreport_in)
+      //DiaQuantificationReport(qreport_in)
+
+      if (diann_params.nonorm) {
+        non_norm_report = Channel.fromPath('NO__FILE')
+        report_to_qc = qreport_in
+        | map { it + [false] } // normalize=false
+        | DiaQuantificationReport
+      } else {
+      //  // Make 2 reports, create a non-normalized table also
+      //  // for plotting so users can see effect of normalization
+      //  // The non normalized table is not output
+        report_to_qc = qreport_in
+        | map { it + [true] } // normalize=true
+        | DiaQuantificationReport
+        qreport_in
+        | map { it + [false] } // normalize=false
+        | NonNormalizedDiannReport
+        non_norm_report = NonNormalizedDiannReport.out.precursors_split
+      }
+
 
       raws_ftypes = raw_c.bruker
       .map { [it[1], 'bruker'] }
       .concat(raw_c.thermo
         .map { [it[1], 'thermo'] }
       )
-      QC_REPORT(raws_ftypes, input_to_qc, DiaQuantificationReport.out.precursors_split, params.proteinconflvl)
+      QC_REPORT(raws_ftypes, input_to_qc, report_to_qc.precursors_split, non_norm_report, params.proteinconflvl)
 
 
       reports_out = DiaQuantificationReport.out.report
