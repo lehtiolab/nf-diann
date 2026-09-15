@@ -1,7 +1,6 @@
 #!/usr/bin/env nextflow
 
 include { paramsSummaryMap } from 'plugin/nf-schema'
-
 include { identify_info_map; listify; read_header } from './modules.nf' 
 include { DiaQuantificationReport ;
           DiaQuantificationReport as NonNormalizedDiannReport; 
@@ -24,7 +23,6 @@ process parseEnsemblFasta {
   """
   sed 's/ pep .*gene:\\(ENS.*\\) / \\1/' $inputdb > $outputdb
   """
-
 }
 
 
@@ -74,7 +72,6 @@ cache 'lenient'
     grep ERROR stdout.bak && exit 1
 
     mv library.log.txt insilico_predict_lib.log
-    # Is this used in predict from fasta, but maybe test this:
     """
 }
 
@@ -267,7 +264,6 @@ process TrainQuantUMS {
     --use-quant \
     --quant-ori-names \
     --temp quants \
-    --quant-train-runs 0:${listify(raws).size() -1} \
     ${diannparams.ms1acc ? "--mass-acc-ms1 ${diannparams.ms1acc}" : ''} \
     ${diannparams.ms2acc ? "--mass-acc ${diannparams.ms2acc}" : ''} \
     ${diannparams.window ? "--window $diannparams.window" : ''} \
@@ -312,13 +308,8 @@ process logConcat {
 }
 
 
-
-
 workflow {
   main:
-  // FIXME
-//  ms1acc = [timstof: 20, velos: 10, qe: 10, astral: 10][instrument]
-//  ms2acc = 20
 
   if (params.library && file(params.library).extension == 'speclib' && params.output_pred_lib) {
     exit 1, 'Cannot output new predicted library while also being passed a --library'
