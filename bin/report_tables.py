@@ -121,7 +121,7 @@ libs = []
 for dirp, dirnames, fns in os.walk('precplothtml/sample__0__amount_precursors_files', followlinks=True):
     for fn in fns:
         srcfn = os.path.join(dirp, fn)
-        if not os.path.exists(srcfn) or fn.endswith('.min.js') or fn.endswith('.scss'):
+        if not os.path.exists(srcfn) or fn.endswith('.scss'):
             continue
         with open(srcfn) as fp:
             if fn.endswith('.js'):
@@ -130,9 +130,14 @@ for dirp, dirnames, fns in os.walk('precplothtml/sample__0__amount_precursors_fi
                 libs.append([fn, f'<style type="text/css">{fp.read()}</style>'])
 if len(libs):
     with open('libs.js', 'w') as fp:
-        for fn in ['htmlwidgets.js', 'plotly.js', 'typedarray.js', 'jquery.js', 'crosstalk.min.css',
+        for fn in ['htmlwidgets.js', 'plotly.js', 'typedarray.min.js', 'jquery.js', 'crosstalk.min.css',
                 'crosstalk.js', 'plotly-htmlwidgets.css', 'plotly-latest.js']:
-            lib = [x[1] for x in libs if x[0] == fn][0]
+            try:
+                lib = [x[1] for x in libs if x[0] == fn][0]
+            except IndexError:
+                print(f'Could not find library for HTML output {fn}, whic '
+                        'should result from precursor table plotting')
+                raise
             fp.write(f'{lib}\n')
 
 # Summary table

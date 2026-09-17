@@ -60,11 +60,11 @@ ptypes = list(
   # Is there no # of fragments data in DIANN?
 )
   
+inputfn = read.table(inputfnpath, header=T, sep="\t", comment.char = "", quote = "")
+inputfn$Run = tools::file_path_sans_ext(basename(inputfn$file_path))
 for (grouper in names(colmap)) {
-  inputfn = read.table(inputfnpath, header=T, sep="\t", comment.char = "", quote = "")
-  inputfn$Run = tools::file_path_sans_ext(basename(inputfn$file_path))
-  
   chunk = 0
+  xcol = colmap[[grouper]][1]
   accu_miscleav = data.frame(file=character(), precursorcount=character(), sample=character(), nr_scans=character(), missed_cleavage=character(), nrprec=character(), text=character(), percent=character())
   accu_nrprec = data.frame(file=character(), precursorcount=character(), sample=character(), nr_scans=character())
   for (precursortable in precursortables) {
@@ -76,7 +76,6 @@ for (grouper in names(colmap)) {
     vert_height = 20 * nr_verts + 200
     
     samplefnmap = unique(data.frame(file=precs_labeled[[filenamecol]], sample=precs_labeled[[samplecol]]))
-    xcol =  colmap[[grouper]][1]
     precursors = aggregate(precs_labeled[c(seqcol)], by=precs_labeled[xcol], length)
     names(precursors) = c(grouper, 'precursorcount')
     precursors = merge(precursors, samplefnmap, by=grouper, all=T)

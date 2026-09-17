@@ -31,20 +31,17 @@ with open(inputfn) as fp:
         files.append(os.path.splitext(os.path.basename(vals[0]))[0])
         samples.append(vals[1])
 fnsamples = Table.from_arrays([array(files), array(samples)], names=['Run', 'sample'])
-sorted_p = precursors.join(fnsamples, 'Run', join_type='inner').sort_by('sample').sort_by('Run')
+sorted_p = precursors.join(fnsamples, 'Run', join_type='inner').sort_by('Run').sort_by('sample')
 
 
 # Find which rows contain "next sample/file" in sorted table
 new_file_row_breaks, new_sample_row_breaks = [], []
-row_sample_map = {}
 old_sample = False
 for row, sample in enumerate(sorted_p['sample']):
     if sample != old_sample:
         new_sample_row_breaks.append(row)
-        row_sample_map[row] = sample # ???
         old_sample = sample
 new_sample_row_breaks.append(row + 1)
-row_sample_map[row] = sample
 old_fn = False
 for row, fn in enumerate(sorted_p['Run']):
     if fn != old_fn:
