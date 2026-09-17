@@ -78,7 +78,6 @@ for (grouper in names(colmap)) {
     samplefnmap = unique(data.frame(file=precs_labeled[[filenamecol]], sample=precs_labeled[[samplecol]]))
     precursors = aggregate(precs_labeled[c(seqcol)], by=precs_labeled[xcol], length)
     names(precursors) = c(grouper, 'precursorcount')
-    precursors = merge(precursors, samplefnmap, by=grouper, all=T)
   
     miscleav = aggregate(precs_labeled[c(seqcol)], by=precs_labeled[c(miscleavcol, xcol)], length)
     names(miscleav) = c('missed_cleavage', grouper, 'nrprec')
@@ -88,6 +87,7 @@ for (grouper in names(colmap)) {
     if (grouper == 'file') {
       fake_3_mc = data.frame(missed_cleavage=3, file=unique(miscleav$file), nrprec=0, text=unique(miscleav$file))
       miscleav_plot = rbind(miscleav, fake_3_mc)
+      precursors = merge(precursors, samplefnmap, by=grouper, all=T)
       precursors = merge(precursors, amount_ms2, by=grouper)
     } else {
       miscleav_plot = miscleav
