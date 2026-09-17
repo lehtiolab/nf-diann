@@ -106,7 +106,7 @@ for plotname, (pfn, textfn) in featplotfns.items():
                 if textfn:
                     with open(os.path.join(pdir, textfn)) as fp:
                         featplots[plotname][f'{featname}__text'] = fp.read().strip().split('\n')
-    if all(x is False for x in featplots[plotname].values()):
+    if all(x == [] for x in featplots[plotname].values()):
         featplots[plotname] = False
 
 # JS libraries to add to HTML
@@ -131,7 +131,7 @@ for dirp, dirnames, fns in os.walk('precplothtml/sample__0__amount_precursors_fi
 if len(libs):
     with open('libs.js', 'w') as fp:
         for fn in ['htmlwidgets.js', 'plotly.js', 'typedarray.min.js', 'jquery.js', 'crosstalk.min.css',
-                'crosstalk.js', 'plotly-htmlwidgets.css', 'plotly-latest.js']:
+                'crosstalk.js', 'plotly-htmlwidgets.css', 'plotly-latest.min.js']:
             try:
                 lib = [x[1] for x in libs if x[0] == fn][0]
             except IndexError:
