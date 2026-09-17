@@ -229,8 +229,10 @@
       let tabs = [
         ['results', document.getElementById('resultstab'), document.getElementById('resultspage')],
         ['rundata', document.getElementById('rundatatab'), document.getElementById('rundatapage')],
+        {% if reporttype == 'full' %}
         ['psmqc', document.getElementById('precqctab'), document.getElementById('psmqcpage')],
         ['featqc', document.getElementById('featqctab'), document.getElementById('featqcpage')],
+        {% endif %}
       ];
       tabs.forEach(t => {
         t[1].addEventListener('click', e => toggleTab(t[0]));
